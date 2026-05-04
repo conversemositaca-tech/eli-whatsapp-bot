@@ -1,4 +1,4 @@
-const { obtenerLeadsEnFollowup, actualizarPasoFollowup } = require("./airtable");
+const { obtenerLeadsEnFollowup, actualizarPasoFollowup } = require("./supabase");
 const { enviarMensaje, enviarImagenUrl } = require("./evolution");
 
 // Modo test: delays cortos (segundos) y verificación frecuente, para probar

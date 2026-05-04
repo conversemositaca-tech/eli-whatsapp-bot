@@ -6,8 +6,8 @@ const PORT = process.env.PORT || 3000;
 // Validar variables de entorno críticas al arrancar
 const REQUIRED_ENV = [
   "OPENAI_API_KEY",
-  "AIRTABLE_PAT",
-  "AIRTABLE_BASE_ID",
+  "SUPABASE_URL",
+  "SUPABASE_KEY",
   "EVOLUTION_API_URL",
   "EVOLUTION_API_KEY",
   "EVOLUTION_INSTANCE",

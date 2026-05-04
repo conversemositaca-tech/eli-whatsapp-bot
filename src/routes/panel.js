@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const { enviarImagenUrl, enviarMensaje } = require("../services/evolution");
-const { buscarMemoria, crearMemoria } = require("../services/airtable");
+const { buscarMemoria, crearMemoria } = require("../services/supabase");
 
 // Token de acceso — configurar ADMIN_TOKEN en .env
 function verificarToken(req, res, next) {

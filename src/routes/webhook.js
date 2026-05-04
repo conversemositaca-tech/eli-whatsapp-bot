@@ -62,7 +62,7 @@ const {
   actualizarMemoria,
   registrarOActualizarLead,
   crearLeadInicialSiNoExiste,
-} = require("../services/airtable");
+} = require("../services/supabase");
 const { calcularDemora, esperar } = require("../utils/humanDelay");
 
 // ── DEBOUNCE ────────────────────────────────────────────────────────────────
