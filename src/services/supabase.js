@@ -1,4 +1,5 @@
 const { createClient } = require("@supabase/supabase-js");
+const WebSocket = require("ws");
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
@@ -7,8 +8,11 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
   console.warn("[SUPABASE] Faltan SUPABASE_URL o SUPABASE_KEY en .env");
 }
 
+// Node 18 no trae WebSocket nativo; el cliente Realtime de Supabase lo
+// requiere al inicializarse aunque no lo usemos. Pasamos ws como transport.
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: false },
+  realtime: { transport: WebSocket },
 });
 
 const TABLA_LEADS = "leads_conversemos";
