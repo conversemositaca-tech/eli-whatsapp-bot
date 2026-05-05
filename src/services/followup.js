@@ -162,4 +162,10 @@ function iniciarFollowup() {
   setInterval(verificarYEnviarFollowups, INTERVALO_MS);
 }
 
-module.exports = { iniciarFollowup, verificarYEnviarFollowups };
+module.exports = {
+  iniciarFollowup,
+  verificarYEnviarFollowups,
+  // exportados para scripts de testing (forzar-followup.js)
+  SECUENCIA,
+  primerNombre,
+};
