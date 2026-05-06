@@ -137,7 +137,6 @@ async function registrarOActualizarLead(telefono, lead) {
     psicologo_asignado: lead.psicologo_sugerido || null,
     precalificacion:    lead.calificacion      || "NUEVO",
     fecha_actualizacion: ahora,
-    paso_followup:      lead.dni_contacto ? 8 : 0,
     dni_contacto:       lead.dni_contacto      || null,
     dni_paciente:       lead.dni_paciente      || null,
   };
@@ -151,15 +150,20 @@ async function registrarOActualizarLead(telefono, lead) {
 
   if (existing) {
     const dniNuevo = !existing.dni_contacto && !!fields.dni_contacto;
+    // paso_followup NO se toca en updates ordinarios: el contador es acumulativo
+    // por conversación aunque el usuario haya respondido entremedio. Solo se sube a 8
+    // cuando recién aparece el DNI (lead cerrado → detiene la secuencia).
+    const updateFields = dniNuevo ? { ...fields, paso_followup: 8 } : fields;
     const { error } = await supabase
       .from(TABLA_LEADS)
-      .update(fields)
+      .update(updateFields)
       .eq("id_lead", existing.id_lead);
     lanzarSiError(error, "registrarOActualizarLead.update");
     return { isNew: false, dniNuevo, recordId: existing.id_lead };
   }
 
   fields.fecha = ahora;
+  fields.paso_followup = fields.dni_contacto ? 8 : 0;
   const { data: created, error } = await supabase
     .from(TABLA_LEADS)
     .insert(fields)
