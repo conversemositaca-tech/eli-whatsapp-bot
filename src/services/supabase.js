@@ -242,6 +242,16 @@ async function actualizarPasoFollowup(recordId, nuevoPaso) {
   lanzarSiError(error, "actualizarPasoFollowup");
 }
 
+// Setea paso_followup=8 para sacar al lead de la cola de recontacto.
+// Se usa cuando GPT-4o detecta rechazo explícito ("no me interesa", "no insistas", etc).
+async function pausarFollowup(telefono) {
+  const { error } = await supabase
+    .from(TABLA_LEADS)
+    .update({ paso_followup: 8 })
+    .eq("id_usuario", telefono);
+  lanzarSiError(error, "pausarFollowup");
+}
+
 module.exports = {
   buscarMemoria,
   crearMemoria,
@@ -250,4 +260,5 @@ module.exports = {
   crearLeadInicialSiNoExiste,
   obtenerLeadsEnFollowup,
   actualizarPasoFollowup,
+  pausarFollowup,
 };

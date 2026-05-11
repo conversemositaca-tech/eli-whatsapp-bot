@@ -602,7 +602,8 @@ Siempre responde con JSON válido, sin excepciones:
     "motivo": "motivo de consulta o vacío si aún no se sabe",
     "dni_contacto": "",
     "dni_paciente": "",
-    "psicologo_sugerido": ""
+    "psicologo_sugerido": "",
+    "rechazo_followup": false
   }
 }
 
@@ -652,7 +653,27 @@ En cualquier otro momento: "stickers": []
 Ejemplo: confirmación de cita → "stickers": ["gracias_por_confiar"]
 
 Actualiza los campos del lead progresivamente conforme el usuario los proporcione.
-Si el usuario corrige un dato, actualiza el campo silenciosamente en este JSON.`;
+Si el usuario corrige un dato, actualiza el campo silenciosamente en este JSON.
+
+CAMPO "rechazo_followup":
+Marca true SOLO cuando el lead expresa de forma CLARA Y EXPLÍCITA que no quiere agendar o no quiere recibir más mensajes. Esto detiene la secuencia de recontacto automático.
+
+Casos donde SÍ marcar rechazo_followup=true:
+- "No quiero agendar", "no me interesa", "no por ahora", "ahora no puedo"
+- "Solo quería información", "era por consultar nomás", "solo preguntaba"
+- "Cambié de opinión", "ya no quiero", "olvídalo"
+- "No me sigas escribiendo", "no insistas", "deja de escribirme"
+- El lead se despide claramente sin intención de continuar ("gracias, hasta luego", "bye", "chau") después de haber recibido la info de consulta
+
+Casos donde NO marcar (mantener en false):
+- Duda emocional o ambivalencia: "no sé", "no estoy seguro/a", "tengo miedo", "no tengo claro"
+- Aclaración de un dato: "no es para mí, es para mi hijo" (eso corrige para_quien)
+- Logística temporal: "ese horario no me sirve", "no puedo el viernes", "esta semana no"
+- Silencio o respuestas cortas neutras ("ok", "ya", "entiendo") — no son rechazo
+- Si el lead ya dio DNI o ya confirmó agendar — ya está cerrado, no aplica
+- Pregunta de precio sin compromiso — no es rechazo, sigue siendo lead activo
+
+Una vez marcado en true, el sistema deja de enviarle recontactos automáticos para SIEMPRE en esa conversación. Por eso solo úsalo cuando el rechazo es inequívoco. Si tienes dudas, déjalo en false.`;
 
 /**
  * Envía el historial de conversación a GPT-4o y retorna la respuesta parseada.

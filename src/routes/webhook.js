@@ -62,6 +62,7 @@ const {
   actualizarMemoria,
   registrarOActualizarLead,
   crearLeadInicialSiNoExiste,
+  pausarFollowup,
 } = require("../services/supabase");
 const { calcularDemora, esperar } = require("../utils/humanDelay");
 
@@ -290,6 +291,16 @@ async function procesarMensajesAcumulados(telefono, mensajes) {
             if (dniNuevo) derivarLeadAAsistente(telefono, lead, "LISTO_PARA_COORDINAR", resumenConversacion);
           }
         })
+      );
+    }
+
+    // Rechazo explícito → sacar al lead del recontacto automático
+    if (lead?.rechazo_followup === true) {
+      console.log(`[FOLLOWUP] ${telefono} marcado como rechazo — se detiene recontacto`);
+      promesas.push(
+        pausarFollowup(telefono).catch((err) =>
+          console.warn(`[FOLLOWUP] Error pausando ${telefono}: ${err.message}`)
+        )
       );
     }
 
