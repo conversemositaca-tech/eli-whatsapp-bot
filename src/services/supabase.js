@@ -214,7 +214,7 @@ async function crearLeadInicialSiNoExiste(telefono) {
 async function obtenerLeadsEnFollowup() {
   const { data, error } = await supabase
     .from(TABLA_LEADS)
-    .select("id_lead, id_usuario, nombre_cliente, paso_followup, fecha_actualizacion, precalificacion")
+    .select("id_lead, id_usuario, nombre_cliente, paciente, edad, para_quien, sede, motivo, psicologo_asignado, paso_followup, fecha_actualizacion, precalificacion, resumen")
     .lt("paso_followup", 8)
     .not("id_usuario", "is", null);
   lanzarSiError(error, "obtenerLeadsEnFollowup");
@@ -222,11 +222,18 @@ async function obtenerLeadsEnFollowup() {
   return (data || []).map((row) => ({
     id: row.id_lead,
     fields: {
-      CELULAR:           row.id_usuario,
-      NOMBRES:           row.nombre_cliente,
-      PASO_FOLLOWUP:     row.paso_followup ?? 0,
-      ult_actividad_bot: row.fecha_actualizacion,
-      ESTADO:            row.precalificacion,
+      CELULAR:            row.id_usuario,
+      NOMBRES:            row.nombre_cliente,
+      PACIENTE:           row.paciente,
+      EDAD:               row.edad,
+      PARA_QUIEN:         row.para_quien,
+      SEDE:               row.sede,
+      MOTIVO:             row.motivo,
+      PSICOLOGO_ASIGNADO: row.psicologo_asignado,
+      PASO_FOLLOWUP:      row.paso_followup ?? 0,
+      ult_actividad_bot:  row.fecha_actualizacion,
+      ESTADO:             row.precalificacion,
+      RESUMEN:            row.resumen,
     },
   }));
 }

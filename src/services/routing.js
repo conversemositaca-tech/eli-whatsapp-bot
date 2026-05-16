@@ -5,7 +5,8 @@ const { enviarMensaje } = require("./evolution");
  *
  * Tipos:
  *   'NUEVO_LEAD'          — lead calificado por primera vez
- *   'LISTO_PARA_COORDINAR' — Eli ya recopiló DNI, listo para asignar horario y cobrar
+ *   'LISTO_PARA_COORDINAR' — Eli ya recopiló DNI, listo para asignar horario y cobrar (= lead CERRADO)
+ *   'NO_CERRADO'          — lead llegó a la oferta de la consulta y se quedó sin responder 3h (resumen ejecutivo)
  *   'RECONTACTO'          — lead frío, Eli envió seguimiento automático sin respuesta
  */
 async function derivarLeadAAsistente(telefonoCliente, lead, tipo = "NUEVO_LEAD", resumen = "") {
@@ -24,6 +25,7 @@ async function derivarLeadAAsistente(telefonoCliente, lead, tipo = "NUEVO_LEAD",
   const construir = {
     NUEVO_LEAD:           construirNuevoLead,
     LISTO_PARA_COORDINAR: construirListoParaCoordinar,
+    NO_CERRADO:           construirNoCerrado,
     RECONTACTO:           construirRecontacto,
   }[tipo] || construirNuevoLead;
 
@@ -90,6 +92,37 @@ function construirListoParaCoordinar(telefonoCliente, lead, nombreAsistente, sed
   if (resumen) lineas.push("", `📝 Contexto: ${resumen}`);
 
   lineas.push("", "👉 *Siguiente paso:* envíale horarios disponibles y coordina el pago de S/50.");
+
+  return lineas.join("\n");
+}
+
+function construirNoCerrado(telefonoCliente, lead, nombreAsistente, sede, resumen) {
+  const esTercero = lead.para_quien && lead.para_quien !== "yo mismo";
+  const nombre = lead.nombre_contacto || "este lead";
+
+  const icono = {
+    ALTO:  "🔴 ALTO",
+    MEDIO: "🟡 MEDIO",
+    BAJO:  "🟢 BAJO",
+  }[lead.calificacion] || "⚪ Sin calificar";
+
+  const lineas = [
+    `🟠 *LEAD NO CERRADO — ÍTACA ${sede}*`,
+    "",
+    `${nombre} llegó a la oferta de la primera consulta pero lleva 3 horas sin responder a los recordatorios automáticos de Eli.`,
+    "",
+    `📊 ${icono}`,
+    `📱 WhatsApp: wa.me/${telefonoCliente}`,
+    `👤 Contacto: ${nombre}`,
+  ];
+
+  if (esTercero) lineas.push(`🧑‍⚕️ Paciente: ${lead.nombre_paciente || "—"} (${lead.para_quien})`);
+  lineas.push(`🎂 Edad: ${lead.edad_paciente ?? "—"}`);
+  lineas.push(`💬 Motivo: ${lead.motivo || "—"}`);
+  if (lead.psicologo_sugerido) lineas.push(`👩‍⚕️ Psicólogo sugerido: ${lead.psicologo_sugerido}`);
+  if (resumen) lineas.push("", `📝 Resumen: ${resumen}`);
+
+  lineas.push("", "👉 *Considera escribirle tú directamente* — Eli seguirá con los recordatorios automáticos pero un toque humano puede cambiar la balanza.");
 
   return lineas.join("\n");
 }

@@ -1,5 +1,6 @@
 const { obtenerLeadsEnFollowup, actualizarPasoFollowup } = require("./supabase");
 const { enviarMensaje, enviarImagenUrl } = require("./evolution");
+const { derivarLeadAAsistente } = require("./routing");
 
 // Modo test: delays cortos (segundos) y verificación frecuente, para probar
 // la secuencia completa en ~5 minutos en vez de 15 días.
@@ -139,6 +140,26 @@ async function verificarYEnviarFollowups() {
 
         await actualizarPasoFollowup(record.id, paso + 1);
         console.log(`[FOLLOWUP] Paso ${paso + 1}/${SECUENCIA.length} → ${telefono} (${nombre || "sin nombre"})`);
+
+        // Aviso NO_CERRADO a Yazmin/Ayvi después del paso 1 (3h sin responder),
+        // solo si el lead ya tenía motivo + ciudad (señal de que llegó hasta la oferta).
+        if (paso === 1 && !DEMO_MODE && record.fields["MOTIVO"] && record.fields["SEDE"]) {
+          derivarLeadAAsistente(
+            telefono,
+            {
+              nombre_contacto:    record.fields["NOMBRES"],
+              nombre_paciente:    record.fields["PACIENTE"],
+              edad_paciente:      record.fields["EDAD"],
+              para_quien:         record.fields["PARA_QUIEN"],
+              ciudad:             record.fields["SEDE"],
+              motivo:             record.fields["MOTIVO"],
+              psicologo_sugerido: record.fields["PSICOLOGO_ASIGNADO"],
+              calificacion:       record.fields["ESTADO"],
+            },
+            "NO_CERRADO",
+            record.fields["RESUMEN"] || ""
+          ).catch((err) => console.warn(`[NO_CERRADO] Error notificando: ${err.message}`));
+        }
       } catch (err) {
         console.error(`[FOLLOWUP] Error paso ${paso} → ${telefono}:`, err.message);
       }
