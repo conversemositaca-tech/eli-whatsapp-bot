@@ -38,10 +38,12 @@ async function buscarMemoria(telefono) {
     .from(TABLA_CHATS)
     .select("message_content, assistant_response, date_time")
     .eq("user_id", telefono)
-    .order("date_time", { ascending: true });
+    .order("date_time", { ascending: false })
+    .limit(10);
   lanzarSiError(errChats, "buscarMemoria.chats");
 
   if (!chats || chats.length === 0) return null;
+  chats.reverse();
 
   const { data: lead, error: errLead } = await supabase
     .from(TABLA_LEADS)
@@ -75,6 +77,8 @@ async function buscarMemoria(telefono) {
  */
 async function guardarUltimoIntercambio(telefono, history) {
   let inicio = 0;
+  let huboResumen = false;
+
   if (history[0]?.role === "system") {
     const match = history[0].content?.match(RESUMEN_REGEX);
     if (match) {
@@ -86,8 +90,44 @@ async function guardarUltimoIntercambio(telefono, history) {
         })
         .eq("id_usuario", telefono);
       lanzarSiError(error, "guardarUltimoIntercambio.resumen");
+      huboResumen = true;
     }
     inicio = 1;
+  }
+
+  if (huboResumen) {
+    const { error: errDel } = await supabase
+      .from(TABLA_CHATS)
+      .delete()
+      .eq("user_id", telefono);
+    lanzarSiError(errDel, "guardarUltimoIntercambio.purge");
+
+    const rows = [];
+    const baseTime = Date.now();
+    for (let i = inicio; i < history.length; i++) {
+      if (history[i].role === "user") {
+        const asst = history[i + 1]?.role === "assistant" ? history[i + 1].content : null;
+        rows.push({
+          user_id: telefono,
+          message_content: history[i].content,
+          assistant_response: asst,
+          date_time: new Date(baseTime + rows.length).toISOString(),
+        });
+        if (asst !== null) i++;
+      } else if (history[i].role === "assistant") {
+        rows.push({
+          user_id: telefono,
+          message_content: null,
+          assistant_response: history[i].content,
+          date_time: new Date(baseTime + rows.length).toISOString(),
+        });
+      }
+    }
+    if (rows.length > 0) {
+      const { error } = await supabase.from(TABLA_CHATS).insert(rows);
+      lanzarSiError(error, "guardarUltimoIntercambio.reinsert");
+    }
+    return telefono;
   }
 
   let ultimoUser = null;
