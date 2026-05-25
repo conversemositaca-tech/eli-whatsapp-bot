@@ -35,20 +35,22 @@ function iniciarPresencia(numero) {
         number: jid,
         options: { presence, delay },
       })
-      .catch((e) =>
-        console.warn(`[PRESENCE] ✗ ${numero}:`, e.response?.status, e.message)
-      );
+      .then(() => true)
+      .catch((e) => {
+        console.warn(`[PRESENCE] ✗ ${numero}:`, e.response?.status, e.message);
+        if (e.response?.status === 400) activo = false;
+        return false;
+      });
 
   const tick = () => {
     if (!activo) return;
 
-    // 25% de las veces: pausa breve (deja de escribir y retoma) para parecer humana
     const hacerPausa = Math.random() < 0.25;
 
     if (hacerPausa) {
       enviarEstado("paused", 1000).finally(() => {
         if (!activo) return;
-        const pausaMs = 1500 + Math.random() * 2500; // 1.5s – 4s de pausa
+        const pausaMs = 1500 + Math.random() * 2500;
         setTimeout(() => {
           if (!activo) return;
           enviarEstado("composing", 6000).finally(() => {
