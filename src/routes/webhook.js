@@ -335,6 +335,7 @@ async function procesarMensajesAcumulados(telefono, mensajes) {
         err.response.data
       );
     }
+    pausarFollowup(telefono).catch(() => {});
   }
 }
 

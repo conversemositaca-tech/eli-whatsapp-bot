@@ -1,4 +1,4 @@
-const { obtenerLeadsEnFollowup, actualizarPasoFollowup } = require("./supabase");
+const { obtenerLeadsEnFollowup, actualizarPasoFollowup, buscarMemoria } = require("./supabase");
 const { enviarMensaje, enviarImagenUrl } = require("./evolution");
 const { derivarLeadAAsistente } = require("./routing");
 
@@ -130,6 +130,14 @@ async function verificarYEnviarFollowups() {
       if (!telefono) continue;
 
       const nombre = primerNombre(record.fields["NOMBRES"]);
+
+      if (paso === 0) {
+        const mem = await buscarMemoria(telefono);
+        if (!mem) {
+          console.log(`[FOLLOWUP] Skip ${telefono} — sin historial de chat, el bot nunca respondió`);
+          continue;
+        }
+      }
 
       try {
         if (step.imagen) {
