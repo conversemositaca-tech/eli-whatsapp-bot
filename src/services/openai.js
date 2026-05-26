@@ -565,6 +565,30 @@ Indica que una vez confirmado el horario, proceden con el pago de la primera con
 NO pidas el pago tú. NO des horarios específicos. El pago va SIEMPRE después de confirmar horario con la coordinadora.
 
 ════════════════════════════════════
+CIERRE DE LEAD — RESUMEN A COORDINADORA
+════════════════════════════════════
+Cuando el lead ya completó TODO el flujo (tiene: para_quien + edad + ciudad + motivo + nombre + DNI + confirmó que quiere agendar), el lead está CERRADO. En ese momento:
+
+1. RESPONDE AL LEAD con un cierre cálido + sticker:
+   "Listo, ya le paso tus datos a {Yazmin/Ayvi} para que coordinen contigo el horario y te confirmen tu cita 🐘💙"
+   (Yazmin si es Piura, Ayvi si es Lima o Virtual)
+
+2. MARCA en el JSON: "lead_cerrado": true
+
+3. LLENA "resumen_coordinadora" con TODOS los datos recogidos en este formato:
+   "Nuevo lead listo: <nombre_paciente>, <edad>a, <ciudad>, para: <para_quien>, motivo: <motivo breve>, DNI: <dni>. Escribió <nombre_contacto> desde el <número>. Ya confirmó que quiere agendar."
+
+   Ejemplo real:
+   "Nuevo lead listo: Camila Torres, 24a, Piura, para: ella misma, motivo: ansiedad y problemas para dormir, DNI: 74859123. Escribió Camila Torres desde el +51987654321. Ya confirmó que quiere agendar."
+
+   Si es para otra persona:
+   "Nuevo lead listo: Matías López, 8a, Lima, para: hijo, motivo: problemas de conducta en el colegio, DNI paciente: 83920145, DNI contacto: 45678912. Escribió Andrea López desde el +51912345678. Ya confirmó que quiere agendar."
+
+4. INCLUYE el sticker de cierre: "stickers": ["nos_vemos_pronto"]
+
+REGLA: NO marques lead_cerrado=true si falta algún dato clave (nombre, edad, ciudad, motivo, DNI, confirmación de agendar). Si falta algo, sigue recogiéndolo antes de cerrar.
+
+════════════════════════════════════
 PREGUNTAS FRECUENTES
 ════════════════════════════════════
 Responde brevemente y retoma el flujo donde lo dejaste.
@@ -610,6 +634,8 @@ Siempre responde con JSON válido, sin excepciones:
   "respuesta": "El mensaje que le envías al usuario por WhatsApp",
   "imagenes": [],
   "stickers": [],
+  "lead_cerrado": false,
+  "resumen_coordinadora": "",
   "lead": {
     "nombre_contacto": "nombre de quien escribe",
     "nombre_paciente": "nombre de quien recibirá terapia (puede ser el mismo)",
@@ -762,6 +788,8 @@ async function procesarConIA(history, nuevoMensaje, opciones = {}) {
     imagenes: parsed.imagenes || [],
     stickers: parsed.stickers || [],
     lead: parsed.lead,
+    lead_cerrado: parsed.lead_cerrado || false,
+    resumen_coordinadora: parsed.resumen_coordinadora || "",
     historialActualizado,
   };
 }

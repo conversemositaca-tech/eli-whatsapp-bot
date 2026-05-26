@@ -5,6 +5,7 @@ const {
   iniciarPresencia,
   presenciaInmediata,
   simularEscribiendo,
+  enviarMensaje,
   enviarMensajeChunked,
   enviarImagenUrl,
   enviarSticker,
@@ -212,13 +213,13 @@ async function procesarMensajesAcumulados(telefono, mensajes) {
     const presencia = iniciarPresencia(telefono);
 
     // ── 3. Procesar con IA ─────────────────────────────────────────────────
-    const { respuesta, lead, imagenes, stickers, historialActualizado } = await procesarConIA(
+    const { respuesta, lead, imagenes, stickers, lead_cerrado, resumen_coordinadora, historialActualizado } = await procesarConIA(
       historyPrevio,
       mensajeParaIA,
       { imagenBase64, imagenMime }
     );
 
-    console.log(`[IA] ${telefono} → calificacion:${lead?.calificacion} ciudad:${lead?.ciudad}`);
+    console.log(`[IA] ${telefono} → calificacion:${lead?.calificacion} ciudad:${lead?.ciudad}${lead_cerrado ? " ✅ CERRADO" : ""}`);
 
     // ── 4. Esperar demora humana (typing sigue visible durante este tiempo) ─
     const demoraMs = calcularDemora(respuesta);
@@ -292,6 +293,21 @@ async function procesarMensajesAcumulados(telefono, mensajes) {
           }
         })
       );
+    }
+
+    // Lead cerrado → enviar resumen a coordinadora + pausar followup
+    if (lead_cerrado && resumen_coordinadora) {
+      const ciudad = (lead?.ciudad || "").toLowerCase();
+      const numCoord = ciudad === "lima" ? process.env.ASISTENTE_LIMA : process.env.ASISTENTE_PIURA;
+      const nombreCoord = ciudad === "lima" ? "Ayvi" : "Yazmin";
+      if (numCoord) {
+        console.log(`[CIERRE] Enviando resumen a ${nombreCoord} (${numCoord})`);
+        promesas.push(
+          enviarMensaje(numCoord, `✅ *LEAD CERRADO — ÍTACA ${ciudad === "lima" ? "LIMA" : "PIURA"}*\n\n${resumen_coordinadora}`)
+            .catch((err) => console.warn(`[CIERRE] Error enviando resumen: ${err.message}`))
+        );
+      }
+      promesas.push(pausarFollowup(telefono).catch(() => {}));
     }
 
     // Rechazo explícito → sacar al lead del recontacto automático
