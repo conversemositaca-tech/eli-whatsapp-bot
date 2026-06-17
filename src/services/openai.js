@@ -217,9 +217,6 @@ PIURA:
 - Ps. Máximo Aldana     — 15 a más — adolescentes y adultos
   Enfoque: Terapia de Esquemas e Integrativo. Especialista en: duelo, ansiedad, depresión, autoestima, miedo al abandono, sentimiento de fracaso, conflictos familiares, relaciones interpersonales, autolesiones, separación.
 
-- Ps. Joyce Calle       — 18 a más — adultos y parejas
-  Enfoque: Conductual Contextual e Integral. Especialista en: ansiedad, depresión, trastornos de personalidad, miedos y fobias, estrés postraumático, control de impulsos, sexualidad, problemas de pareja, familia y duelo.
-
 LIMA:
 - Ps. Mayra Davalos     — 11 a más — adolescentes, adultos
   Enfoque: Conductual e Integrativo. Especialista en: ansiedad, depresión, adicciones, miedos y fobias, autoestima, violencia física y psicológica, sexualidad, trastornos de personalidad, problemas de pareja y familia, duelo.
@@ -239,11 +236,11 @@ LIMA:
 - Ps. Meriveth Rojas    — todas las edades — niños, adolescentes, adultos, parejas
   Enfoque: Contextual, Cognitivo Conductual y Gestalt. Especialista en: ansiedad, depresión, adicciones, estrés postraumático, violencia, trastornos de personalidad, problemas de pareja y familia, duelo, psicología perinatal.
 
-- Ps. Pamela Revilla    — 12 a más — adolescentes y adultos
-  Enfoque: Cognitivo Conductual. Especialista en: ansiedad, depresión, estrés, autoestima, violencia física y psicológica, trastornos de personalidad, problemas de conducta.
+- Ps. Angelo Villa      — 12 a más — adolescentes, jóvenes y adultos
+  Enfoque: Aceptación y Compromiso (ACT) y Analítico Funcional (FAP). Especialista en: ansiedad, depresión, duelo, miedos y fobias, desregulación emocional, control de impulsos, autoestima, dependencia emocional, estrés, habilidades sociales, acompañamiento a padres de familia, proyecto de vida.
 
-- Ps. Arlette Santivañez — 12 a más — adolescentes y adultos
-  Enfoque: Racional Emotivo Conductual. Especialista en: ansiedad, depresión, estrés, burnout, relaciones insanas, duelo, pérdidas de pareja, desarrollo personal, reinvención y propósito de vida.
+- Ps. Sabrina Sardon    — 12 a más — adolescentes, jóvenes y adultos
+  Enfoque: Conductual Contextual e Integral (ACT). Especialista en: trastornos de la conducta alimentaria, imagen corporal y autoestima, ansiedad, depresión, duelo, regulación emocional, relación con la comida y el cuerpo, dolor crónico, estrés, desarrollo personal, relaciones interpersonales.
 
 SUGERENCIA DE PSICÓLOGO (aplica siempre que tengas sede + edad + motivo):
 Usa la edad del PACIENTE (no del contacto) para filtrar psicólogos disponibles.
@@ -267,27 +264,28 @@ PIURA:
   · Terapia familiar / pareja de los padres: Ps. Angi
   · Depresión / orientación vocacional: Ps. Alejandro
   · Duelo / autoestima / separación familiar: Ps. Máximo
-- Adultos (18+): Ps. Emma, Ps. Angi, Ps. Sofía, Ps. Alejandro, Ps. Máximo o Ps. Joyce según motivo
+- Adultos (18+): Ps. Emma, Ps. Angi, Ps. Sofía, Ps. Alejandro o Ps. Máximo según motivo
   · Estrés postraumático / violencia / adicciones: Ps. Emma o Ps. Angi
   · Ansiedad severa / pánico / autolesiones / riesgo suicida: Ps. Sofía
   · Depresión / consejería: Ps. Alejandro
   · Duelo / autoestima / relaciones / separación: Ps. Máximo
-  · Pareja / familia / duelo: Ps. Joyce o Ps. Angi
-- Parejas: Ps. Joyce, Ps. Emma o Ps. Angi
+  · Pareja / familia / duelo: Ps. Emma o Ps. Angi
+- Parejas: Ps. Emma o Ps. Angi
 - Adulto mayor: Ps. Emma
 
 LIMA:
 - Niños (5-10 años): Ps. Karol o Ps. Meriveth (especialistas en infancia)
-- Adolescentes (11-17): Ps. Mayra, Ps. Karol, Ps. Paolo, Ps. Cristel, Ps. Meriveth o Ps. Pamela según motivo
+- Adolescentes (11-17): Ps. Mayra, Ps. Karol, Ps. Paolo, Ps. Cristel, Ps. Meriveth, Ps. Sabrina o Ps. Angelo según motivo
   · Niños con problemas de conducta / TEA / crianza: Ps. Karol o Ps. Meriveth
   · Riesgo suicida / identidad / género: Ps. Paolo
   · Dependencia emocional / TCA / habilidades sociales: Ps. Cristel
-- Adultos (18+): Ps. Mayra, Ps. Paolo, Ps. Cristel, Ps. Bruno, Ps. Meriveth, Ps. Pamela o Ps. Arlette según motivo
+- Adultos (18+): Ps. Mayra, Ps. Paolo, Ps. Cristel, Ps. Bruno, Ps. Meriveth, Ps. Angelo o Ps. Sabrina según motivo
   · Violencia / adicciones / estrés postraumático: Ps. Mayra o Ps. Meriveth
   · Pareja / sexualidad / identidad de género: Ps. Paolo o Ps. Meriveth
   · Ansiedad social / rumia / autoestima: Ps. Bruno
-  · Burnout / propósito de vida / relaciones insanas: Ps. Arlette
-  · Duelo por ruptura / TCA / habilidades sociales: Ps. Cristel
+  · Trastornos de conducta alimentaria / imagen corporal / relación con la comida: Ps. Sabrina
+  · Duelo / proyecto de vida / acompañamiento a padres: Ps. Angelo
+  · Dependencia emocional / duelo por ruptura / habilidades sociales: Ps. Cristel
 - Parejas: Ps. Paolo o Ps. Meriveth
 - Adulto mayor: Ps. Mayra o Ps. Bruno
 
