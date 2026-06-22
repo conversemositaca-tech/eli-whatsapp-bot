@@ -51,6 +51,7 @@ const STICKERS = {
 };
 
 const { procesarConIA, transcribirAudio } = require("../services/openai");
+const { esPsicologo, psicologoEnCache, manejarNotaClinica } = require("../services/notaClinica");
 const { derivarLeadAAsistente } = require("../services/routing");
 const { registrarLeadEnSheets, registrarLeadEnPipeline } = require("../services/googlesheets");
 const { detectarCrisis } = require("../agents/detectarCrisis");
@@ -73,6 +74,9 @@ const { calcularDemora, esperar } = require("../utils/humanDelay");
 // Si llegan varios mensajes seguidos (burbujas), los acumula y los procesa juntos
 // como si fueran uno solo. Así Eli siempre da UNA sola respuesta.
 const DEBOUNCE_MS = 15_000; // 15 segundos — agrupa burbujas y da sensación más humana
+// En "modo nota clínica" (psicóloga ya reconocida) el ida y vuelta debe ser ágil:
+// agrupamos solo 3s para no hacer esperar 15s en cada paso de la conversación.
+const DEBOUNCE_NOTA_MS = 3_000;
 const pendingMessages = new Map(); // telefono → { timer, mensajes[] }
 
 // ── DEDUPLICACIÓN ────────────────────────────────────────────────────────────
@@ -97,6 +101,15 @@ function marcarProcesado(id) {
  */
 async function procesarMensajesAcumulados(telefono, mensajes) {
   try {
+    // ── Modo nota clínica ────────────────────────────────────────────────────
+    // Si el número es de una psicóloga registrada en Itaca, Eli NO entra al flujo
+    // de leads: la atiende para registrar la nota de voz en la historia clínica.
+    const psico = await esPsicologo(telefono);
+    if (psico) {
+      await manejarNotaClinica(telefono, mensajes, psico);
+      return;
+    }
+
     const textosFinales = [];
     let imagenBase64 = null;
     let imagenMime = null;
@@ -408,12 +421,13 @@ router.post("/", (req, res) => {
   // Reiniciar el timer cada vez que llega un mensaje nuevo
   if (pending.timer) clearTimeout(pending.timer);
 
+  const debounce = psicologoEnCache(telefono) ? DEBOUNCE_NOTA_MS : DEBOUNCE_MS;
   pending.timer = setTimeout(() => {
     const mensajesAcumulados = pending.mensajes;
     pendingMessages.delete(telefono);
     // El loop de typing lo arranca procesarMensajesAcumulados internamente
     procesarMensajesAcumulados(telefono, mensajesAcumulados);
-  }, DEBOUNCE_MS);
+  }, debounce);
 
   res.status(200).json({ status: "queued" });
 });
