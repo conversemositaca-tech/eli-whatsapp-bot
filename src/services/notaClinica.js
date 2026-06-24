@@ -91,12 +91,18 @@ async function buscarPaciente(telefono, q) {
   return (data && data.pacientes) || [];
 }
 
-async function guardarNota(telefono, pacienteId, tipo, transcripcion) {
+async function guardarNota(telefono, sesion) {
   const { data } = await itaca.post("/api/integraciones/nota-voz/", {
-    telefono, paciente_id: pacienteId, tipo, transcripcion,
+    telefono, paciente_id: sesion.paciente.id, tipo: sesion.tipo,
+    resumen: sesion.resumen || "", aspectos: sesion.aspectos || "",
+    objetivos: sesion.objetivos || "", recomendaciones: sesion.recomendaciones || "",
   });
   return data;
 }
+
+const esOmitir = (t) => /^(omitir|omite|saltar|nada|ninguna|ninguno|-)$/i.test((t || "").trim());
+const tipoLabel = (t) => (t === "historia" ? "Historia clínica" : "Ficha de evolución");
+const corto = (s, n = 220) => { s = (s || "").trim(); return s.length > n ? s.slice(0, n) + "…" : s; };
 
 function preguntarTipo(telefono, sesion, prefijo = "") {
   const p = prefijo ? prefijo + " " : "";
@@ -129,6 +135,9 @@ async function manejarNotaClinica(telefono, mensajes, psico) {
     .join(" ")
     .trim();
   const hayAudio = mensajes.some((m) => m.tipo === "audio");
+  const transAudio = hayAudio ? await transcribirAudios(mensajes) : "";
+  // Respuesta del paso actual: lo dictado por voz (si hubo audio) o lo que escribió.
+  const input = (transAudio || texto).trim();
   let sesion = getSesion(telefono);
 
   // Cancelar en cualquier momento
@@ -137,44 +146,36 @@ async function manejarNotaClinica(telefono, mensajes, psico) {
     return enviarMensaje(telefono, "Listo, cancelé esa nota. No guardé nada. 👍");
   }
 
-  // ── Llega audio: inicia una nota nueva o lo agrega a la que está en curso ──
-  if (hayAudio) {
-    const trans = await transcribirAudios(mensajes);
-    if (!trans) {
+  // ── Sin sesión: arranca con la nota de voz (el resumen de la sesión) ──
+  if (!sesion) {
+    if (hayAudio && !transAudio) {
       return enviarMensaje(telefono, "No pude escuchar el audio 😕. ¿Me lo reenvías?");
     }
-    if (sesion && sesion.transcripcion) {
-      sesion.transcripcion = (sesion.transcripcion + " " + trans).trim();
+    if (hayAudio) {
+      sesion = { step: "ASK_PATIENT", resumen: transAudio };
       setSesion(telefono, sesion);
-      return repreguntar(telefono, sesion, "➕ Lo agregué a la nota.");
+      return enviarMensaje(telefono,
+        `📝 Recibí tu nota de voz, *${psico.nombre}*.\n\n¿De qué *paciente* es? (nombre o DNI)`);
     }
-    sesion = { step: "ASK_PATIENT", transcripcion: trans };
-    setSesion(telefono, sesion);
     return enviarMensaje(telefono,
-      `📝 Recibí tu nota de voz, *${psico.nombre}*.\n\n¿De qué *paciente* es? Escríbeme su *nombre* o *DNI*.`);
-  }
-
-  // ── Solo texto ──
-  if (!sesion) {
-    return enviarMensaje(telefono,
-      `Hola ${psico.nombre} 👋 Soy Eli. Para registrar una nota en la historia clínica, ` +
-      `envíame la *nota de voz* de la sesión y te guío para guardarla.`);
+      `Hola ${psico.nombre} 👋 Soy Eli. Para registrar una sesión, envíame la *nota de voz* ` +
+      `(el resumen) y te guío con unas preguntas.`);
   }
 
   switch (sesion.step) {
     case "ASK_PATIENT": {
-      if (texto.length < 2) {
-        return enviarMensaje(telefono, "Escríbeme el *nombre* o *DNI* del paciente, por favor.");
+      if (input.length < 2) {
+        return enviarMensaje(telefono, "Escríbeme (o dime) el *nombre* o *DNI* del paciente.");
       }
       let pacientes;
-      try { pacientes = await buscarPaciente(telefono, texto); }
+      try { pacientes = await buscarPaciente(telefono, input); }
       catch (e) {
         console.warn(`[NOTA] buscar error: ${e.message}`);
         return enviarMensaje(telefono, "Tuve un problema buscando al paciente 😕. Inténtalo de nuevo en un momento.");
       }
       if (pacientes.length === 0) {
         return enviarMensaje(telefono,
-          `No encontré a *${texto}* en el sistema. Revisa el nombre o DNI y escríbelo de nuevo (o *cancelar*).`);
+          `No encontré a *${input}* en el sistema. Revisa el nombre o DNI y escríbelo de nuevo (o *cancelar*).`);
       }
       if (pacientes.length === 1) {
         sesion.candidatos = pacientes; sesion.step = "CONFIRM_PATIENT"; setSesion(telefono, sesion);
@@ -212,19 +213,41 @@ async function manejarNotaClinica(telefono, mensajes, psico) {
       if (t === "1" || t.includes("histor")) tipo = "historia";
       else if (t === "2" || t.includes("evol")) tipo = "evolucion";
       if (!tipo) return preguntarTipo(telefono, sesion, "No te entendí.");
-      sesion.tipo = tipo; sesion.step = "CONFIRM_SAVE"; setSesion(telefono, sesion);
-      const tipoLabel = tipo === "historia" ? "Historia clínica" : "Ficha de evolución";
-      const t2 = sesion.transcripcion;
-      const resumen = t2.length > 600 ? t2.slice(0, 600) + "…" : t2;
+      sesion.tipo = tipo; sesion.step = "Q_ASPECTOS"; setSesion(telefono, sesion);
       return enviarMensaje(telefono,
-        `Voy a guardar esta *${tipoLabel}* en la historia de ${pacienteLabel(sesion.paciente)}:\n\n` +
-        `«${resumen}»\n\n¿Confirmas? Responde *sí* o *cancelar*.`);
+        `Perfecto, una *${tipoLabel(tipo)}* para ${pacienteLabel(sesion.paciente)}.\n\n` +
+        `Te hago 3 preguntas para completarla (responde por *voz* o *texto*, o escribe *omitir*).\n\n` +
+        `*2) Aspectos clínicamente relevantes:*`);
+    }
+
+    case "Q_ASPECTOS": {
+      sesion.aspectos = esOmitir(input) ? "" : input;
+      sesion.step = "Q_OBJETIVOS"; setSesion(telefono, sesion);
+      return enviarMensaje(telefono, "*3) Objetivos o tareas:*");
+    }
+
+    case "Q_OBJETIVOS": {
+      sesion.objetivos = esOmitir(input) ? "" : input;
+      sesion.step = "Q_RECOMENDACIONES"; setSesion(telefono, sesion);
+      return enviarMensaje(telefono, "*4) Recomendaciones:*");
+    }
+
+    case "Q_RECOMENDACIONES": {
+      sesion.recomendaciones = esOmitir(input) ? "" : input;
+      sesion.step = "CONFIRM_SAVE"; setSesion(telefono, sesion);
+      return enviarMensaje(telefono,
+        `Voy a guardar esta *${tipoLabel(sesion.tipo)}* en la historia de ${pacienteLabel(sesion.paciente)}:\n\n` +
+        `📝 *Resumen:* ${corto(sesion.resumen) || "—"}\n` +
+        `🔍 *Aspectos:* ${corto(sesion.aspectos) || "—"}\n` +
+        `🎯 *Objetivos:* ${corto(sesion.objetivos) || "—"}\n` +
+        `✅ *Recomendaciones:* ${corto(sesion.recomendaciones) || "—"}\n\n` +
+        `¿Confirmas? Responde *sí* o *cancelar*.`);
     }
 
     case "CONFIRM_SAVE": {
       if (esSi(texto)) {
         try {
-          const r = await guardarNota(telefono, sesion.paciente.id, sesion.tipo, sesion.transcripcion);
+          const r = await guardarNota(telefono, sesion);
           limpiar(telefono);
           if (r && r.ok) {
             return enviarMensaje(telefono,
