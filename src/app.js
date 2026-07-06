@@ -4,11 +4,15 @@ const webhookRouter = require("./routes/webhook");
 const panelRouter = require("./routes/panel");
 const errorHandler = require("./middleware/errorHandler");
 const { iniciarFollowup, verificarYEnviarFollowups } = require("./services/followup");
+const { cargarEstadoInicial } = require("./services/handoff");
 
 const app = express();
 
 // Iniciar sistema de seguimiento automático de leads fríos
 iniciarFollowup();
+
+// Restaurar los chats que quedaron en atención humana antes de un redeploy
+cargarEstadoInicial();
 
 // Parsear JSON y formularios HTML
 app.use(express.json());

@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const { enviarImagenUrl, enviarMensaje } = require("../services/evolution");
 const { buscarMemoria, crearMemoria } = require("../services/supabase");
+const { obtenerStickersCapturados, listaEnAtencionHumana } = require("../services/handoff");
 
 // Token de acceso — configurar ADMIN_TOKEN en .env
 function verificarToken(req, res, next) {
@@ -99,6 +100,59 @@ router.post("/", verificarToken, async (req, res) => {
     console.error("[PANEL] Error:", err.message);
     res.status(500).send(`Error: ${err.message}`);
   }
+});
+
+// ── GET /panel/stickers?token=xxx — calibrar stickers de control ──────────
+// Muestra los últimos stickers propios detectados con su fileSha256, para
+// copiarlos a STICKER_PAUSA_SHA256 / STICKER_REACTIVAR_SHA256 en .env.
+router.get("/stickers", verificarToken, (req, res) => {
+  const capturados = obtenerStickersCapturados();
+  const pausados = listaEnAtencionHumana();
+
+  const filas = capturados.length
+    ? capturados
+        .map(
+          (c) => `<tr>
+            <td>${c.at}</td>
+            <td>${c.telefono}</td>
+            <td><b>${c.rol}</b></td>
+            <td class="mono">${c.sha}</td>
+          </tr>`
+        )
+        .join("")
+    : `<tr><td colspan="4">Aún no se detectó ningún sticker propio. Envía el sticker de control dentro de un chat y recarga.</td></tr>`;
+
+  res.send(`<!DOCTYPE html>
+<html lang="es"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Eli — Calibrar stickers de control</title>
+<style>
+  body { font-family: sans-serif; background:#f0f4f8; padding:20px; color:#2d3748; }
+  h2 { margin-bottom:4px; } p { color:#718096; font-size:14px; }
+  table { width:100%; border-collapse:collapse; background:#fff; border-radius:10px; overflow:hidden; box-shadow:0 2px 12px rgba(0,0,0,.08); margin-top:16px; }
+  th, td { text-align:left; padding:10px 12px; border-bottom:1px solid #edf2f7; font-size:13px; }
+  th { background:#4299e1; color:#fff; }
+  .mono { font-family:monospace; word-break:break-all; }
+  .box { background:#fff; border-radius:10px; padding:16px; margin-top:16px; font-size:13px; box-shadow:0 2px 12px rgba(0,0,0,.08); }
+  code { background:#edf2f7; padding:2px 5px; border-radius:4px; }
+</style></head>
+<body>
+  <h2>🐘 Calibrar stickers de control</h2>
+  <p>Envía cada sticker dentro de un chat (desde el WhatsApp de Eli) y recarga esta página. Copia el <b>fileSha256</b> a <code>.env</code>.</p>
+  <table>
+    <thead><tr><th>Cuándo</th><th>Chat</th><th>Rol</th><th>fileSha256 (base64)</th></tr></thead>
+    <tbody>${filas}</tbody>
+  </table>
+  <div class="box">
+    <b>Configuración en .env:</b><br>
+    <code>STICKER_PAUSA_SHA256=&lt;hash del sticker que pausa a Eli&gt;</code><br>
+    <code>STICKER_REACTIVAR_SHA256=&lt;hash del sticker que reactiva a Eli&gt;</code><br>
+    <small>Puedes poner varios hashes separados por coma. Después de editar, redeploy.</small>
+  </div>
+  <div class="box">
+    <b>Chats en atención humana ahora mismo:</b> ${pausados.length ? pausados.join(", ") : "ninguno"}
+  </div>
+</body></html>`);
 });
 
 module.exports = router;

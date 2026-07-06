@@ -182,6 +182,35 @@ function extraerTelefono(remoteJid) {
   return remoteJid.replace(/@.*$/, "");
 }
 
+/**
+ * Extrae el fileSha256 de un sticker como string base64.
+ * Este hash identifica de forma estable al archivo del sticker: WhatsApp lo
+ * calcula sobre el contenido (el .webp), así que el MISMO sticker enviado
+ * varias veces siempre produce el mismo fileSha256. Lo usamos para reconocer
+ * los stickers de control (pausar / reactivar a Eli).
+ *
+ * Evolution puede serializar el campo de distintas formas según la versión:
+ * string base64, arreglo de bytes, { type:'Buffer', data:[...] } u objeto de
+ * bytes. Normalizamos todo a base64.
+ *
+ * @param {object} message - El campo message del payload del webhook
+ * @returns {string|null} fileSha256 en base64, o null si no es sticker
+ */
+function extraerStickerSha256(message) {
+  const raw = message?.stickerMessage?.fileSha256;
+  if (!raw) return null;
+  if (typeof raw === "string") return raw.trim();
+  try {
+    if (raw.type === "Buffer" && Array.isArray(raw.data)) {
+      return Buffer.from(raw.data).toString("base64");
+    }
+    const bytes = Array.isArray(raw) ? raw : Object.values(raw);
+    return Buffer.from(bytes).toString("base64");
+  } catch {
+    return null;
+  }
+}
+
 // ─────────────────────────────────────────────
 // DESCARGA DE MEDIA
 // ─────────────────────────────────────────────
@@ -241,5 +270,6 @@ module.exports = {
   extraerTipoMensaje,
   extraerTexto,
   extraerTelefono,
+  extraerStickerSha256,
   descargarMediaBase64,
 };

@@ -12,8 +12,17 @@ const {
   extraerTexto,
   extraerTelefono,
   extraerTipoMensaje,
+  extraerStickerSha256,
   descargarMediaBase64,
 } = require("../services/evolution");
+const {
+  estaEnAtencionHumana,
+  pausarAtencion,
+  reactivarAtencion,
+  esStickerPausa,
+  esStickerReactivar,
+  registrarStickerCapturado,
+} = require("../services/handoff");
 
 const UBICACION_BASE = "https://raw.githubusercontent.com/mirainishimura-maker/eli-whatsapp-bot/main/assets/ubicacion";
 const ASSETS_BASE = "https://raw.githubusercontent.com/mirainishimura-maker/eli-whatsapp-bot/main/assets";
@@ -93,6 +102,55 @@ function yaFueProcesado(id) {
 }
 function marcarProcesado(id) {
   processedIds.set(id, Date.now() + ID_TTL_MS);
+}
+
+/**
+ * Descarta el buffer de mensajes pendientes de un número (y su timer), para
+ * que una respuesta ya encolada no se dispare después de pausar a Eli.
+ */
+function cancelarPendientes(telefono) {
+  const pending = pendingMessages.get(telefono);
+  if (pending?.timer) clearTimeout(pending.timer);
+  pendingMessages.delete(telefono);
+}
+
+/**
+ * Procesa un sticker enviado por el propio número (fromMe). Si coincide con el
+ * sticker de PAUSA, el operador toma el control y Eli deja de responder a ese
+ * chat; si coincide con el de REACTIVAR, Eli retoma. Cualquier otro sticker
+ * propio (incluidos los que envía la misma Eli) se ignora — solo se registra
+ * su hash para poder calibrar los stickers de control la primera vez.
+ */
+function manejarStickerControl(data) {
+  try {
+    const remoteJid = data.key?.remoteJid || "";
+    if (remoteJid.endsWith("@g.us")) return; // ignorar grupos
+
+    // Evitar procesar el mismo evento dos veces (Evolution reintenta).
+    const messageId = data.key?.id;
+    if (messageId) {
+      if (yaFueProcesado(messageId)) return;
+      marcarProcesado(messageId);
+    }
+
+    const telefono = extraerTelefono(remoteJid);
+    const sha = extraerStickerSha256(data.message);
+    if (!telefono || !sha) return;
+
+    registrarStickerCapturado(telefono, sha);
+    console.log(`[CTRL] Sticker propio en ${telefono} — fileSha256=${sha}`);
+
+    if (esStickerPausa(sha)) {
+      console.log(`[CTRL] ⏸️  PAUSA — Eli deja de responder a ${telefono}`);
+      cancelarPendientes(telefono);
+      pausarAtencion(telefono).catch((e) => console.warn(`[CTRL] Error al pausar: ${e.message}`));
+    } else if (esStickerReactivar(sha)) {
+      console.log(`[CTRL] ▶️  REACTIVAR — Eli retoma ${telefono}`);
+      reactivarAtencion(telefono).catch((e) => console.warn(`[CTRL] Error al reactivar: ${e.message}`));
+    }
+  } catch (e) {
+    console.warn(`[CTRL] Error procesando sticker de control: ${e.message}`);
+  }
 }
 
 /**
@@ -386,7 +444,14 @@ router.post("/", (req, res) => {
   const data = req.body?.data;
 
   if (!data) return res.status(200).json({ status: "ignored", reason: "no data" });
-  if (data.key?.fromMe === true) return res.status(200).json({ status: "ignored", reason: "fromMe" });
+
+  // Mensajes salientes del propio número: normalmente se ignoran, PERO
+  // interceptamos los stickers de control con los que el operador toma o
+  // devuelve la conversación a Eli.
+  if (data.key?.fromMe === true) {
+    if (extraerTipoMensaje(data.message) === "sticker") manejarStickerControl(data);
+    return res.status(200).json({ status: "ignored", reason: "fromMe" });
+  }
 
   const remoteJid = data.key?.remoteJid || "";
   if (remoteJid.endsWith("@g.us")) return res.status(200).json({ status: "ignored", reason: "group" });
@@ -406,6 +471,14 @@ router.post("/", (req, res) => {
 
   if (!telefono || !tipoMensaje) {
     return res.status(200).json({ status: "ignored", reason: "unsupported message type" });
+  }
+
+  // Si un humano tomó el control de este chat (sticker de pausa), Eli no
+  // responde: descartamos cualquier respuesta encolada y no procesamos.
+  if (estaEnAtencionHumana(telefono)) {
+    console.log(`[HANDOFF] ${telefono} en atención humana — Eli no responde`);
+    cancelarPendientes(telefono);
+    return res.status(200).json({ status: "ignored", reason: "atencion humana" });
   }
 
   console.log(`[WEBHOOK] ${telefono} (${tipoMensaje}): "${textoUsuario || "—"}"`);

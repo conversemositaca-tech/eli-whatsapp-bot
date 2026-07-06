@@ -299,6 +299,44 @@ async function pausarFollowup(telefono) {
   lanzarSiError(error, "pausarFollowup");
 }
 
+// ── Atención humana (traspaso a un operador) ──────────────────────────────
+// Cuando el operador toma el control de un chat (sticker de pausa), Eli deja
+// de responder. Reutilizamos paso_followup con el centinela 9 = "un humano
+// está atendiendo": queda excluido del followup (la query usa < 8) y el estado
+// sobrevive redeploys. Al reactivar, vuelve a 8 (fuera del recontacto: un
+// humano ya intervino este lead).
+const PASO_ATENCION_HUMANA = 9;
+const PASO_FUERA_FOLLOWUP = 8;
+
+async function marcarAtencionHumana(telefono) {
+  // Aseguramos que exista la fila del lead antes de marcarla.
+  await crearLeadInicialSiNoExiste(telefono);
+  const { error } = await supabase
+    .from(TABLA_LEADS)
+    .update({ paso_followup: PASO_ATENCION_HUMANA })
+    .eq("id_usuario", telefono);
+  lanzarSiError(error, "marcarAtencionHumana");
+}
+
+async function terminarAtencionHumana(telefono) {
+  const { error } = await supabase
+    .from(TABLA_LEADS)
+    .update({ paso_followup: PASO_FUERA_FOLLOWUP })
+    .eq("id_usuario", telefono)
+    .eq("paso_followup", PASO_ATENCION_HUMANA); // solo si seguía en atención humana
+  lanzarSiError(error, "terminarAtencionHumana");
+}
+
+async function listarChatsEnAtencionHumana() {
+  const { data, error } = await supabase
+    .from(TABLA_LEADS)
+    .select("id_usuario")
+    .eq("paso_followup", PASO_ATENCION_HUMANA)
+    .not("id_usuario", "is", null);
+  lanzarSiError(error, "listarChatsEnAtencionHumana");
+  return (data || []).map((r) => r.id_usuario);
+}
+
 module.exports = {
   buscarMemoria,
   crearMemoria,
@@ -308,4 +346,7 @@ module.exports = {
   obtenerLeadsEnFollowup,
   actualizarPasoFollowup,
   pausarFollowup,
+  marcarAtencionHumana,
+  terminarAtencionHumana,
+  listarChatsEnAtencionHumana,
 };
