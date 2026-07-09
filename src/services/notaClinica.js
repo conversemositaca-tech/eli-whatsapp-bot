@@ -94,15 +94,41 @@ async function buscarPaciente(telefono, q) {
 async function guardarNota(telefono, sesion) {
   const { data } = await itaca.post("/api/integraciones/nota-voz/", {
     telefono, paciente_id: sesion.paciente.id, tipo: sesion.tipo,
-    resumen: sesion.resumen || "", aspectos: sesion.aspectos || "",
-    objetivos: sesion.objetivos || "", recomendaciones: sesion.recomendaciones || "",
+    contenido: sesion.borrador || "",
   });
   return data;
+}
+
+/** Contexto clínico del paciente (para que la evolución sea coherente con su historia). */
+async function obtenerContexto(telefono, pacienteId) {
+  try {
+    const { data } = await itaca.get("/api/integraciones/contexto/", { params: { telefono, paciente_id: pacienteId } });
+    return data && data.ok ? data : null;
+  } catch (e) { return null; }
+}
+
+/** ¿El texto parece solo un comando ("quiero registrar…") y no contenido clínico? */
+function pareceComando(t) {
+  t = (t || "").trim();
+  if (/(quiero|deseo|necesito|voy a)?\s*(registrar|registra|anotar)[^.]{0,40}(historia|ficha|evoluci|nota|paciente)/i.test(t)) return true;
+  return /^(historia cl[ií]nica|ficha de evoluci[oó]n)\.?$/i.test(t);
+}
+/** ¿Tiene contenido clínico suficiente para estructurarlo directamente? */
+function esSustancial(t) {
+  t = (t || "").trim();
+  return t.length >= 40 && !pareceComando(t);
 }
 
 const esOmitir = (t) => /^(omitir|omite|saltar|nada|ninguna|ninguno|-)$/i.test((t || "").trim());
 const tipoLabel = (t) => (t === "historia" ? "Historia clínica" : "Ficha de evolución");
 const corto = (s, n = 220) => { s = (s || "").trim(); return s.length > n ? s.slice(0, n) + "…" : s; };
+
+function confirmarGuardar(telefono, sesion) {
+  const extra = sesion.tipo === "historia" ? " (además actualizo su resumen, objetivo y riesgo en el perfil)" : "";
+  return enviarMensaje(telefono,
+    `Voy a registrar una *${tipoLabel(sesion.tipo)}* de ${pacienteLabel(sesion.paciente)}${extra}. La organizo y guardo.\n\n` +
+    `¿Confirmas? Responde *sí* o *cancelar*.`);
+}
 
 function preguntarTipo(telefono, sesion, prefijo = "") {
   const p = prefijo ? prefijo + " " : "";
@@ -118,6 +144,7 @@ function repreguntar(telefono, sesion, prefijo) {
     case "CONFIRM_PATIENT":return enviarMensaje(telefono, `${prefijo} ¿Es ${pacienteLabel(sesion.candidatos[0])}? (*sí*/*no*)`);
     case "PICK_PATIENT":   return enviarMensaje(telefono, `${prefijo} Responde con el *número* del paciente de la lista.`);
     case "ASK_TIPO":       return preguntarTipo(telefono, sesion, prefijo);
+    case "ASK_CONTENIDO":  return enviarMensaje(telefono, `${prefijo} ${sesion.tipo === "historia" ? "Dicta o escribe el caso completo." : "¿Qué ocurrió en esta sesión?"}`);
     case "CONFIRM_SAVE":   return enviarMensaje(telefono, `${prefijo} ¿Confirmas guardar? (*sí*/*cancelar*)`);
     default:               return enviarMensaje(telefono, prefijo);
   }
@@ -146,20 +173,20 @@ async function manejarNotaClinica(telefono, mensajes, psico) {
     return enviarMensaje(telefono, "Listo, cancelé esa nota. No guardé nada. 👍");
   }
 
-  // ── Sin sesión: arranca con la nota de voz (el resumen de la sesión) ──
+  // ── Sin sesión: arranca el registro. Acepta AUDIO o TEXTO. El primer mensaje
+  // NO se toma como contenido clínico salvo que sea sustancial (evita que un
+  // comando tipo "quiero registrar…" se cuele en la nota). ──
   if (!sesion) {
     if (hayAudio && !transAudio) {
       return enviarMensaje(telefono, "No pude escuchar el audio 😕. ¿Me lo reenvías?");
     }
-    if (hayAudio) {
-      sesion = { step: "ASK_PATIENT", resumen: transAudio };
-      setSesion(telefono, sesion);
-      return enviarMensaje(telefono,
-        `📝 Recibí tu nota de voz, *${psico.nombre}*.\n\n¿De qué *paciente* es? (nombre o DNI)`);
-    }
-    return enviarMensaje(telefono,
-      `Hola ${psico.nombre} 👋 Soy Eli. Para registrar una sesión, envíame la *nota de voz* ` +
-      `(el resumen) y te guío con unas preguntas.`);
+    const inicial = (transAudio || texto).trim();
+    sesion = { step: "ASK_PATIENT", borrador: esSustancial(inicial) ? inicial : "" };
+    setSesion(telefono, sesion);
+    const saludo = sesion.borrador
+      ? `📝 Recibí tu nota, *${psico.nombre}*.`
+      : `Hola *${psico.nombre}* 👋 Vamos a registrar una sesión.`;
+    return enviarMensaje(telefono, `${saludo}\n\n¿De qué *paciente* es? (nombre o DNI)`);
   }
 
   switch (sesion.step) {
@@ -213,35 +240,35 @@ async function manejarNotaClinica(telefono, mensajes, psico) {
       if (t === "1" || t.includes("histor")) tipo = "historia";
       else if (t === "2" || t.includes("evol")) tipo = "evolucion";
       if (!tipo) return preguntarTipo(telefono, sesion, "No te entendí.");
-      sesion.tipo = tipo; sesion.step = "Q_ASPECTOS"; setSesion(telefono, sesion);
+      sesion.tipo = tipo;
+      // Si el borrador ya trae contenido clínico, vamos directo a confirmar.
+      if (esSustancial(sesion.borrador)) {
+        sesion.step = "CONFIRM_SAVE"; setSesion(telefono, sesion);
+        return confirmarGuardar(telefono, sesion);
+      }
+      sesion.step = "ASK_CONTENIDO"; setSesion(telefono, sesion);
+      if (tipo === "evolucion") {
+        const ctx = await obtenerContexto(telefono, sesion.paciente.id);
+        let intro = `Perfecto, una *Ficha de evolución* para ${pacienteLabel(sesion.paciente)}.`;
+        if (ctx && ctx.tiene_historia && (ctx.objetivo || ctx.resumen)) {
+          intro += `\n\n_Su proceso:_ ${corto(ctx.objetivo || ctx.resumen, 170)}`;
+        }
+        return enviarMensaje(telefono,
+          `${intro}\n\n*¿Qué ocurrió en esta sesión?* Dícta o escribe lo importante y yo lo redacto (por voz o texto).`);
+      }
       return enviarMensaje(telefono,
-        `Perfecto, una *${tipoLabel(tipo)}* para ${pacienteLabel(sesion.paciente)}.\n\n` +
-        `Te hago 3 preguntas para completarla (responde por *voz* o *texto*, o escribe *omitir*).\n\n` +
-        `*2) Aspectos clínicamente relevantes:*`);
+        `Perfecto, una *Historia clínica* para ${pacienteLabel(sesion.paciente)}.\n\n` +
+        `*Dicta o escribe el caso completo* (motivo, antecedentes, cómo llega, objetivos, riesgo). Yo lo organizo. 🧠`);
     }
 
-    case "Q_ASPECTOS": {
-      sesion.aspectos = esOmitir(input) ? "" : input;
-      sesion.step = "Q_OBJETIVOS"; setSesion(telefono, sesion);
-      return enviarMensaje(telefono, "*3) Objetivos o tareas:*");
-    }
-
-    case "Q_OBJETIVOS": {
-      sesion.objetivos = esOmitir(input) ? "" : input;
-      sesion.step = "Q_RECOMENDACIONES"; setSesion(telefono, sesion);
-      return enviarMensaje(telefono, "*4) Recomendaciones:*");
-    }
-
-    case "Q_RECOMENDACIONES": {
-      sesion.recomendaciones = esOmitir(input) ? "" : input;
-      sesion.step = "CONFIRM_SAVE"; setSesion(telefono, sesion);
-      return enviarMensaje(telefono,
-        `Voy a guardar esta *${tipoLabel(sesion.tipo)}* en la historia de ${pacienteLabel(sesion.paciente)}:\n\n` +
-        `📝 *Resumen:* ${corto(sesion.resumen) || "—"}\n` +
-        `🔍 *Aspectos:* ${corto(sesion.aspectos) || "—"}\n` +
-        `🎯 *Objetivos:* ${corto(sesion.objetivos) || "—"}\n` +
-        `✅ *Recomendaciones:* ${corto(sesion.recomendaciones) || "—"}\n\n` +
-        `¿Confirmas? Responde *sí* o *cancelar*.`);
+    case "ASK_CONTENIDO": {
+      if (input.length < 3) {
+        return enviarMensaje(telefono, sesion.tipo === "historia"
+          ? "Dícta o escribe el caso (o *cancelar*)."
+          : "Cuéntame qué pasó en la sesión (o *cancelar*).");
+      }
+      sesion.borrador = input; sesion.step = "CONFIRM_SAVE"; setSesion(telefono, sesion);
+      return confirmarGuardar(telefono, sesion);
     }
 
     case "CONFIRM_SAVE": {
@@ -250,8 +277,12 @@ async function manejarNotaClinica(telefono, mensajes, psico) {
           const r = await guardarNota(telefono, sesion);
           limpiar(telefono);
           if (r && r.ok) {
-            return enviarMensaje(telefono,
-              `✅ Guardado en la historia de *${r.paciente}* (${r.tipo}). Puedes revisarlo y editarlo en el sistema. 🙌`);
+            const e = r.extracto || {};
+            let msg = `✅ Guardado en la historia de *${r.paciente}* (${r.tipo}).`;
+            if (e.resumen) msg += `\n\n📝 ${corto(e.resumen, 240)}`;
+            if (r.perfil_actualizado) msg += `\n\n📌 Actualicé su *resumen, objetivo y riesgo* en el perfil.`;
+            msg += `\n\nRevísalo y edítalo en el sistema si hace falta. 🙌`;
+            return enviarMensaje(telefono, msg);
           }
           return enviarMensaje(telefono, `No pude guardarlo 😕 (${(r && r.detail) || "error"}). Inténtalo de nuevo.`);
         } catch (e) {
