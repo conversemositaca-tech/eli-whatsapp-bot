@@ -91,10 +91,34 @@ async function buscarPaciente(telefono, q) {
   return (data && data.pacientes) || [];
 }
 
+// Preguntas guiadas por tipo de nota. Eli las pide UNA POR UNA y arma la ficha.
+const PREGUNTAS = {
+  historia: [
+    { k: "motivo", l: "Motivo de consulta", q: "*Motivo de consulta*" },
+    { k: "antecedentes", l: "Antecedentes relevantes", q: "*Antecedentes relevantes*" },
+    { k: "resumen", l: "Resumen clínico", q: "*Resumen clínico*" },
+    { k: "objetivos", l: "Objetivos terapéuticos", q: "*Objetivos terapéuticos*" },
+    { k: "recomendaciones", l: "Recomendaciones generales", q: "*Recomendaciones generales*" },
+    { k: "riesgo", l: "Riesgo", q: "*Riesgo*" },
+  ],
+  evolucion: [
+    { k: "cambios", l: "Cambios desde la sesión anterior", q: "¿Qué *cambios* hubo desde la sesión anterior?" },
+    { k: "temas", l: "Temas trabajados", q: "¿Qué *temas* se trabajaron?" },
+    { k: "intervenciones", l: "Intervenciones del terapeuta", q: "¿Qué *intervenciones* realizó el terapeuta?" },
+    { k: "avances", l: "Avances o dificultades", q: "¿Qué *avances o dificultades* se observaron?" },
+    { k: "tareas", l: "Tareas o acuerdos", q: "¿Qué *tareas o acuerdos* quedaron?" },
+    { k: "siguiente", l: "Para la siguiente sesión", q: "¿Qué consideras importante *trabajar en la siguiente sesión*?" },
+  ],
+};
+
+function preguntarCampo(telefono, sesion) {
+  return enviarMensaje(telefono, PREGUNTAS[sesion.tipo][sesion.campoIdx].q);
+}
+
 async function guardarNota(telefono, sesion) {
   const { data } = await itaca.post("/api/integraciones/nota-voz/", {
     telefono, paciente_id: sesion.paciente.id, tipo: sesion.tipo,
-    contenido: sesion.borrador || "",
+    campos: sesion.respuestas || {},
   });
   return data;
 }
@@ -124,9 +148,11 @@ const tipoLabel = (t) => (t === "historia" ? "Historia clínica" : "Ficha de evo
 const corto = (s, n = 220) => { s = (s || "").trim(); return s.length > n ? s.slice(0, n) + "…" : s; };
 
 function confirmarGuardar(telefono, sesion) {
-  const extra = sesion.tipo === "historia" ? " (además actualizo su resumen, objetivo y riesgo en el perfil)" : "";
+  const P = PREGUNTAS[sesion.tipo];
+  const resumen = P.map((p) => `• *${p.l}:* ${corto(sesion.respuestas[p.k] || "—", 90)}`).join("\n");
+  const extra = sesion.tipo === "historia" ? "\n\n(Además actualizo su resumen, objetivo y riesgo en el perfil.)" : "";
   return enviarMensaje(telefono,
-    `Voy a registrar una *${tipoLabel(sesion.tipo)}* de ${pacienteLabel(sesion.paciente)}${extra}. La organizo y guardo.\n\n` +
+    `Voy a guardar esta *${tipoLabel(sesion.tipo)}* de ${pacienteLabel(sesion.paciente)}:\n\n${resumen}${extra}\n\n` +
     `¿Confirmas? Responde *sí* o *cancelar*.`);
 }
 
@@ -144,7 +170,7 @@ function repreguntar(telefono, sesion, prefijo) {
     case "CONFIRM_PATIENT":return enviarMensaje(telefono, `${prefijo} ¿Es ${pacienteLabel(sesion.candidatos[0])}? (*sí*/*no*)`);
     case "PICK_PATIENT":   return enviarMensaje(telefono, `${prefijo} Responde con el *número* del paciente de la lista.`);
     case "ASK_TIPO":       return preguntarTipo(telefono, sesion, prefijo);
-    case "ASK_CONTENIDO":  return enviarMensaje(telefono, `${prefijo} ${sesion.tipo === "historia" ? "Dicta o escribe el caso completo." : "¿Qué ocurrió en esta sesión?"}`);
+    case "ASK_CAMPO":      return preguntarCampo(telefono, sesion);
     case "CONFIRM_SAVE":   return enviarMensaje(telefono, `${prefijo} ¿Confirmas guardar? (*sí*/*cancelar*)`);
     default:               return enviarMensaje(telefono, prefijo);
   }
@@ -240,34 +266,31 @@ async function manejarNotaClinica(telefono, mensajes, psico) {
       if (t === "1" || t.includes("histor")) tipo = "historia";
       else if (t === "2" || t.includes("evol")) tipo = "evolucion";
       if (!tipo) return preguntarTipo(telefono, sesion, "No te entendí.");
-      sesion.tipo = tipo;
-      // Si el borrador ya trae contenido clínico, vamos directo a confirmar.
-      if (esSustancial(sesion.borrador)) {
-        sesion.step = "CONFIRM_SAVE"; setSesion(telefono, sesion);
-        return confirmarGuardar(telefono, sesion);
-      }
-      sesion.step = "ASK_CONTENIDO"; setSesion(telefono, sesion);
+      // Registro GUIADO: se pregunta campo por campo (distinto para historia y evolución).
+      sesion.tipo = tipo; sesion.respuestas = {}; sesion.campoIdx = 0; sesion.step = "ASK_CAMPO";
+      setSesion(telefono, sesion);
       if (tipo === "evolucion") {
         const ctx = await obtenerContexto(telefono, sesion.paciente.id);
-        let intro = `Perfecto, una *Ficha de evolución* para ${pacienteLabel(sesion.paciente)}.`;
         if (ctx && ctx.tiene_historia && (ctx.objetivo || ctx.resumen)) {
-          intro += `\n\n_Su proceso:_ ${corto(ctx.objetivo || ctx.resumen, 170)}`;
+          await enviarMensaje(telefono, `_Su proceso:_ ${corto(ctx.objetivo || ctx.resumen, 170)}`);
         }
-        return enviarMensaje(telefono,
-          `${intro}\n\n*¿Qué ocurrió en esta sesión?* Dícta o escribe lo importante y yo lo redacto (por voz o texto).`);
       }
-      return enviarMensaje(telefono,
-        `Perfecto, una *Historia clínica* para ${pacienteLabel(sesion.paciente)}.\n\n` +
-        `*Dicta o escribe el caso completo* (motivo, antecedentes, cómo llega, objetivos, riesgo). Yo lo organizo. 🧠`);
+      return preguntarCampo(telefono, sesion);
     }
 
-    case "ASK_CONTENIDO": {
-      if (input.length < 3) {
-        return enviarMensaje(telefono, sesion.tipo === "historia"
-          ? "Dícta o escribe el caso (o *cancelar*)."
-          : "Cuéntame qué pasó en la sesión (o *cancelar*).");
+    case "ASK_CAMPO": {
+      const campo = PREGUNTAS[sesion.tipo][sesion.campoIdx];
+      const val = esOmitir(texto) ? "" : input;
+      if (!esOmitir(texto) && input.length < 1) {
+        return enviarMensaje(telefono, "Escribe o dicta tu respuesta (o *omitir* para saltar este campo, o *cancelar*).");
       }
-      sesion.borrador = input; sesion.step = "CONFIRM_SAVE"; setSesion(telefono, sesion);
+      sesion.respuestas[campo.k] = val;
+      sesion.campoIdx += 1;
+      if (sesion.campoIdx < PREGUNTAS[sesion.tipo].length) {
+        setSesion(telefono, sesion);
+        return preguntarCampo(telefono, sesion);
+      }
+      sesion.step = "CONFIRM_SAVE"; setSesion(telefono, sesion);
       return confirmarGuardar(telefono, sesion);
     }
 
