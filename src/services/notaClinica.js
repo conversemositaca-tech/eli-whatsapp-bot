@@ -10,8 +10,13 @@
  * transcripción en ningún lado salvo el sistema clínico al guardar · Ley 29733).
  */
 const axios = require("axios");
-const { enviarMensaje, descargarMediaBase64 } = require("./evolution");
+const wa = require("./wa");
+const { enviarMensaje, descargarMediaBase64 } = wa;
 const { transcribirAudio } = require("./openai");
+
+// Botones interactivos solo si el proveedor los soporta (Cloud API). En Evolution
+// se usa el menú por texto/números de siempre.
+const USAR_BOTONES = wa.ES_CLOUD && typeof wa.enviarBotones === "function";
 
 const ITACA_URL = (process.env.ITACA_API_URL || "").replace(/\/+$/, "");
 const ITACA_TOKEN = process.env.ITACA_INTEGRACION_TOKEN || "";
@@ -147,20 +152,36 @@ const esOmitir = (t) => /^(omitir|omite|saltar|nada|ninguna|ninguno|-)$/i.test((
 const tipoLabel = (t) => (t === "historia" ? "Historia clínica" : "Ficha de evolución");
 const corto = (s, n = 220) => { s = (s || "").trim(); return s.length > n ? s.slice(0, n) + "…" : s; };
 
+// Pregunta sí/no con botones si se puede; si no, por texto.
+function preguntaSiNo(telefono, texto, siTitle = "Sí") {
+  if (USAR_BOTONES) {
+    return wa.enviarBotones(telefono, texto, [{ id: "si", title: siTitle }, { id: "no", title: "No" }]);
+  }
+  return enviarMensaje(telefono, `${texto}\n\nResponde *sí* o *no*.`);
+}
+
 function confirmarGuardar(telefono, sesion) {
   const P = PREGUNTAS[sesion.tipo];
   const resumen = P.map((p) => `• *${p.l}:* ${corto(sesion.respuestas[p.k] || "—", 90)}`).join("\n");
   const extra = sesion.tipo === "historia" ? "\n\n(Además actualizo su resumen, objetivo y riesgo en el perfil.)" : "";
-  return enviarMensaje(telefono,
-    `Voy a guardar esta *${tipoLabel(sesion.tipo)}* de ${pacienteLabel(sesion.paciente)}:\n\n${resumen}${extra}\n\n` +
-    `¿Confirmas? Responde *sí* o *cancelar*.`);
+  const texto = `Voy a guardar esta *${tipoLabel(sesion.tipo)}* de ${pacienteLabel(sesion.paciente)}:\n\n${resumen}${extra}`;
+  if (USAR_BOTONES) {
+    return wa.enviarBotones(telefono, texto, [{ id: "si", title: "Sí" }, { id: "cancelar", title: "Cancelar" }]);
+  }
+  return enviarMensaje(telefono, `${texto}\n\n¿Confirmas? Responde *sí* o *cancelar*.`);
 }
 
 function preguntarTipo(telefono, sesion, prefijo = "") {
   const p = prefijo ? prefijo + " " : "";
+  const texto = `${p}¿Qué tipo de nota es para ${pacienteLabel(sesion.paciente)}?`;
+  if (USAR_BOTONES) {
+    return wa.enviarBotones(telefono, texto, [
+      { id: "historia", title: "Historia clínica" },
+      { id: "evolucion", title: "Ficha de evolución" },
+    ]);
+  }
   return enviarMensaje(telefono,
-    `${p}¿Qué tipo de nota es para ${pacienteLabel(sesion.paciente)}?\n\n` +
-    `*1)* Historia clínica (primera vez)\n*2)* Ficha de evolución (seguimiento)\n\nResponde *1* o *2*.`);
+    `${texto}\n\n*1)* Historia clínica (primera vez)\n*2)* Ficha de evolución (seguimiento)\n\nResponde *1* o *2*.`);
 }
 
 /** Vuelve a preguntar el paso actual (tras agregar audio a una nota en curso). */
@@ -232,7 +253,7 @@ async function manejarNotaClinica(telefono, mensajes, psico) {
       }
       if (pacientes.length === 1) {
         sesion.candidatos = pacientes; sesion.step = "CONFIRM_PATIENT"; setSesion(telefono, sesion);
-        return enviarMensaje(telefono, `¿Es ${pacienteLabel(pacientes[0])}?\n\nResponde *sí* o *no*.`);
+        return preguntaSiNo(telefono, `¿Es ${pacienteLabel(pacientes[0])}?`);
       }
       sesion.candidatos = pacientes; sesion.step = "PICK_PATIENT"; setSesion(telefono, sesion);
       const lista = pacientes.map((p, i) => `*${i + 1})* ${pacienteLabel(p)}`).join("\n");

@@ -1,6 +1,10 @@
 const express = require("express");
 const router = express.Router();
 
+// Envío/descarga van por el proveedor ACTIVO (Evolution o Cloud API, según
+// WHATSAPP_PROVIDER). El parseo de mensajes ENTRANTES de Evolution se queda en su
+// módulo (solo se usa en la rama Evolution; la rama Cloud usa wa.parsearEntrante).
+const wa = require("../services/wa");
 const {
   iniciarPresencia,
   presenciaInmediata,
@@ -9,12 +13,15 @@ const {
   enviarMensajeChunked,
   enviarImagenUrl,
   enviarSticker,
+  descargarMediaBase64,
+} = wa;
+const {
   extraerTexto,
   extraerTelefono,
   extraerTipoMensaje,
   extraerStickerSha256,
-  descargarMediaBase64,
 } = require("../services/evolution");
+const PROVIDER = wa.ES_CLOUD ? "cloud" : "evolution";
 const {
   estaEnAtencionHumana,
   pausarAtencion,
@@ -428,13 +435,64 @@ async function procesarMensajesAcumulados(telefono, mensajes) {
 }
 
 /**
+ * Encola un mensaje NORMALIZADO en el buffer de debounce del usuario y agenda su
+ * procesamiento. Común a ambos proveedores (Evolution y Cloud API).
+ */
+function encolar(telefono, tipo, texto, data) {
+  if (!pendingMessages.has(telefono)) pendingMessages.set(telefono, { timer: null, mensajes: [] });
+  const pending = pendingMessages.get(telefono);
+  pending.mensajes.push({ tipo, texto, data });
+  if (pending.timer) clearTimeout(pending.timer);
+  const debounce = psicologoEnCache(telefono) ? DEBOUNCE_NOTA_MS : DEBOUNCE_MS;
+  pending.timer = setTimeout(() => {
+    const mensajesAcumulados = pending.mensajes;
+    pendingMessages.delete(telefono);
+    procesarMensajesAcumulados(telefono, mensajesAcumulados);
+  }, debounce);
+}
+
+/**
+ * GET /webhook — verificación del webhook de Meta (WhatsApp Cloud API).
+ * Meta manda hub.mode/hub.verify_token/hub.challenge; devolvemos el challenge si
+ * el verify_token coincide con el nuestro.
+ */
+router.get("/", (req, res) => {
+  const mode = req.query["hub.mode"];
+  const token = req.query["hub.verify_token"];
+  const challenge = req.query["hub.challenge"];
+  if (mode === "subscribe" && token && token === process.env.WHATSAPP_VERIFY_TOKEN) {
+    console.log("[WEBHOOK ☁] Verificación de Meta OK");
+    return res.status(200).send(challenge);
+  }
+  return res.sendStatus(403);
+});
+
+/**
  * POST /webhook
- * Recibe eventos de Evolution API.
- * Responde 200 de inmediato y acumula el mensaje en el buffer de debounce.
- * Después de 45s sin nuevos mensajes del mismo número, muestra "escribiendo..."
- * y procesa todos los mensajes acumulados como uno solo.
+ * Recibe eventos de WhatsApp. Responde 200 de inmediato y acumula el mensaje en el
+ * buffer de debounce; tras unos segundos sin nuevos mensajes, procesa todo junto.
  */
 router.post("/", (req, res) => {
+  // ── Rama Cloud API (Meta): el payload tiene otra forma (entry[].changes[]) ──
+  if (PROVIDER === "cloud") {
+    res.status(200).json({ status: "ok" });
+    let msgs = [];
+    try { msgs = wa.parsearEntrante(req.body); }
+    catch (e) { console.warn(`[WEBHOOK ☁] parse: ${e.message}`); }
+    for (const m of msgs) {
+      if (!m.telefono || !m.tipo) continue;
+      if (m.messageId) {
+        if (yaFueProcesado(m.messageId)) continue;
+        marcarProcesado(m.messageId);
+      }
+      if (estaEnAtencionHumana(m.telefono)) { cancelarPendientes(m.telefono); continue; }
+      console.log(`[WEBHOOK ☁] ${m.telefono} (${m.tipo})${m.botonId ? " botón:" + m.botonId : ""}: "${m.texto || "—"}"`);
+      encolar(m.telefono, m.tipo, m.texto || "", { mediaId: m.mediaId, botonId: m.botonId });
+    }
+    return;
+  }
+
+  // ── Rama Evolution API (actual) ──
   // 1. Solo procesar eventos de mensajes nuevos — ignorar status, delivery, etc.
   const evento = req.body?.event;
   if (evento && evento !== "messages.upsert") {
@@ -483,25 +541,8 @@ router.post("/", (req, res) => {
 
   console.log(`[WEBHOOK] ${telefono} (${tipoMensaje}): "${textoUsuario || "—"}"`);
 
-  // Agregar al buffer del usuario
-  if (!pendingMessages.has(telefono)) {
-    pendingMessages.set(telefono, { timer: null, mensajes: [] });
-  }
-
-  const pending = pendingMessages.get(telefono);
-  pending.mensajes.push({ tipo: tipoMensaje, texto: textoUsuario, data });
-
-  // Reiniciar el timer cada vez que llega un mensaje nuevo
-  if (pending.timer) clearTimeout(pending.timer);
-
-  const debounce = psicologoEnCache(telefono) ? DEBOUNCE_NOTA_MS : DEBOUNCE_MS;
-  pending.timer = setTimeout(() => {
-    const mensajesAcumulados = pending.mensajes;
-    pendingMessages.delete(telefono);
-    // El loop de typing lo arranca procesarMensajesAcumulados internamente
-    procesarMensajesAcumulados(telefono, mensajesAcumulados);
-  }, debounce);
-
+  // Agregar al buffer del usuario y agendar el procesamiento (debounce).
+  encolar(telefono, tipoMensaje, textoUsuario, data);
   res.status(200).json({ status: "queued" });
 });
 
