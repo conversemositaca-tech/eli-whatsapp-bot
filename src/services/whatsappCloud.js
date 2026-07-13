@@ -70,10 +70,12 @@ async function enviarBotones(telefono, texto, botones) {
     reply: { id: String(b.id).slice(0, 256), title: String(b.title).slice(0, 20) },
   }));
   if (!buttons.length) return enviarMensaje(telefono, texto);
+  // Meta limita el cuerpo interactivo a 1024 caracteres.
+  const body = String(texto || "").slice(0, 1024);
   return _enviar({
     to: normalizarTo(telefono),
     type: "interactive",
-    interactive: { type: "button", body: { text: texto }, action: { buttons } },
+    interactive: { type: "button", body: { text: body }, action: { buttons } },
   });
 }
 
@@ -92,7 +94,7 @@ async function enviarLista(telefono, texto, boton, opciones, titulo = "") {
     interactive: {
       type: "list",
       ...(titulo ? { header: { type: "text", text: titulo.slice(0, 60) } } : {}),
-      body: { text: texto },
+      body: { text: String(texto || "").slice(0, 1024) },
       action: { button: String(boton || "Elegir").slice(0, 20), sections: [{ rows }] },
     },
   });

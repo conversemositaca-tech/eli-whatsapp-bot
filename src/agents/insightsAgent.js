@@ -1,4 +1,4 @@
-const { enviarMensaje } = require("../services/evolution");
+const { enviarMensaje } = require("../services/wa");
 
 // ── Almacén diario en memoria ────────────────────────────────────────────────
 // Se resetea después de enviar el resumen. Si el proceso se reinicia se pierde

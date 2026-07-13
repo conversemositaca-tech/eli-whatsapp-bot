@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { enviarImagenUrl, enviarMensaje } = require("../services/evolution");
+const { enviarImagenUrl, enviarMensaje } = require("../services/wa");
 const { buscarMemoria, crearMemoria } = require("../services/supabase");
 const { obtenerStickersCapturados, listaEnAtencionHumana } = require("../services/handoff");
 

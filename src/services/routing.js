@@ -1,4 +1,4 @@
-const { enviarMensaje } = require("./evolution");
+const { enviarMensaje } = require("./wa");
 
 /**
  * Deriva notificaciones a Yazmin (Piura) o Ayvi (Lima) según la ciudad del lead.

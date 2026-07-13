@@ -1,5 +1,5 @@
 const { obtenerLeadsEnFollowup, actualizarPasoFollowup, buscarMemoria } = require("./supabase");
-const { enviarMensaje, enviarImagenUrl } = require("./evolution");
+const { enviarMensaje, enviarImagenUrl } = require("./wa");
 const { derivarLeadAAsistente } = require("./routing");
 
 // Modo test: delays cortos (segundos) y verificación frecuente, para probar
