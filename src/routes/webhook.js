@@ -24,8 +24,8 @@ const {
   registrarStickerCapturado,
 } = require("../services/handoff");
 
-const UBICACION_BASE = "https://raw.githubusercontent.com/mirainishimura-maker/eli-whatsapp-bot/main/assets/ubicacion";
-const ASSETS_BASE = "https://raw.githubusercontent.com/mirainishimura-maker/eli-whatsapp-bot/main/assets";
+const UBICACION_BASE = "https://raw.githubusercontent.com/conversemositaca-tech/eli-whatsapp-bot/main/assets/ubicacion";
+const ASSETS_BASE = "https://raw.githubusercontent.com/conversemositaca-tech/eli-whatsapp-bot/main/assets";
 
 // Imágenes predefinidas que Eli puede enviar al cliente
 const IMAGENES = {
@@ -40,7 +40,7 @@ const IMAGENES = {
   brujula:        { url: `${ASSETS_BASE}/brujula.jpeg`, caption: "" },
 };
 
-const STICKER_BASE = "https://raw.githubusercontent.com/mirainishimura-maker/eli-whatsapp-bot/main/assets/stickers";
+const STICKER_BASE = "https://raw.githubusercontent.com/conversemositaca-tech/eli-whatsapp-bot/main/assets/stickers";
 
 // Stickers de marca que Eli puede enviar según el contexto emocional
 const STICKERS = {
