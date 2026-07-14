@@ -65,6 +65,15 @@ const esCancelar = (t) => /^(cancelar|cancela|cancel|olv[ií]dalo)$/i.test((t ||
 const esSi = (t) => /^(s[ií]|si|yes|ok|oka?y|dale|correcto|confirmo|as[ií] es|exacto)$/i.test((t || "").trim());
 const esNo = (t) => /^(no|nop|negativo|incorrecto)$/i.test((t || "").trim());
 
+/** ¿El mensaje es una PREGUNTA/consulta (no un nombre ni DNI de paciente)? */
+function esConsulta(t) {
+  t = (t || "").trim();
+  if (t.length < 3) return false;
+  if (/^[\d\s.\-+]{5,}$/.test(t)) return false; // puros dígitos/tel -> es búsqueda de paciente
+  if (t.includes("?") || t.includes("¿")) return true;
+  return /^(qu[eé]|cu[aá]nt|cu[aá]l|cu[aá]ndo|qui[eé]n|c[oó]mo|tengo|mis|dime|dame|mu[eé]stra|list|hay|cu[eé]nta)\b/i.test(t);
+}
+
 function pacienteLabel(p) {
   const doc = p.documento ? ` · DNI ${p.documento}` : "";
   const sede = p.sede ? ` · ${p.sede}` : "";
@@ -89,6 +98,17 @@ async function transcribirAudios(mensajes) {
 async function buscarPaciente(telefono, q) {
   const { data } = await itaca.get("/api/integraciones/pacientes/", { params: { telefono, q } });
   return (data && data.pacientes) || [];
+}
+
+/** Consulta rápida de datos del psicólogo (pacientes activos, agenda de hoy…). */
+async function consultar(telefono, pregunta) {
+  try {
+    const { data } = await itaca.post("/api/integraciones/consulta/", { telefono, pregunta });
+    return (data && data.respuesta) || "No pude consultar eso ahora 😕. Inténtalo de nuevo.";
+  } catch (e) {
+    console.warn(`[NOTA] consultar error: ${e.message}`);
+    return "Tuve un problema al consultar eso 😕. Inténtalo en un momento.";
+  }
 }
 
 // Preguntas guiadas por tipo de nota. Eli las pide UNA POR UNA y arma la ficha.
@@ -207,6 +227,10 @@ async function manejarNotaClinica(telefono, mensajes, psico) {
       return enviarMensaje(telefono, "No pude escuchar el audio 😕. ¿Me lo reenvías?");
     }
     const inicial = (transAudio || texto).trim();
+    // Si es una pregunta (no un nombre/DNI), la respondemos sin iniciar el registro.
+    if (esConsulta(inicial)) {
+      return enviarMensaje(telefono, await consultar(telefono, inicial));
+    }
     sesion = { step: "ASK_PATIENT", borrador: esSustancial(inicial) ? inicial : "" };
     setSesion(telefono, sesion);
     const saludo = sesion.borrador
@@ -217,6 +241,9 @@ async function manejarNotaClinica(telefono, mensajes, psico) {
 
   switch (sesion.step) {
     case "ASK_PATIENT": {
+      if (esConsulta(input)) {
+        return enviarMensaje(telefono, await consultar(telefono, input));
+      }
       if (input.length < 2) {
         return enviarMensaje(telefono, "Escríbeme (o dime) el *nombre* o *DNI* del paciente.");
       }
