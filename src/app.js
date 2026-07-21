@@ -4,12 +4,16 @@ const webhookRouter = require("./routes/webhook");
 const panelRouter = require("./routes/panel");
 const errorHandler = require("./middleware/errorHandler");
 const { iniciarFollowup, verificarYEnviarFollowups } = require("./services/followup");
+const { iniciarResumenDiario, enviarResumenDiario } = require("./services/resumenDiario");
 const { cargarEstadoInicial } = require("./services/handoff");
 
 const app = express();
 
 // Iniciar sistema de seguimiento automático de leads fríos
 iniciarFollowup();
+
+// Resumen diario de agenda a los terapeutas (7am Lima, vía Itaca)
+iniciarResumenDiario();
 
 // Restaurar los chats que quedaron en atención humana antes de un redeploy
 cargarEstadoInicial();
@@ -32,6 +36,15 @@ app.all("/test-followup", (req, res) => {
   console.log("[FOLLOWUP] Trigger manual recibido");
   verificarYEnviarFollowups().catch((err) =>
     console.error("[FOLLOWUP] Error en trigger manual:", err.message)
+  );
+  res.json({ status: "triggered", timestamp: new Date().toISOString() });
+});
+
+// Trigger manual del resumen diario de agenda (para probar sin esperar las 7am).
+app.all("/test-resumen-diario", (req, res) => {
+  console.log("[RESUMEN] Trigger manual recibido");
+  enviarResumenDiario().catch((err) =>
+    console.error("[RESUMEN] Error en trigger manual:", err.message)
   );
   res.json({ status: "triggered", timestamp: new Date().toISOString() });
 });

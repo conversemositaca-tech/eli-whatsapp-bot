@@ -71,7 +71,12 @@ function esConsulta(t) {
   if (t.length < 3) return false;
   if (/^[\d\s.\-+]{5,}$/.test(t)) return false; // puros dígitos/tel -> es búsqueda de paciente
   if (t.includes("?") || t.includes("¿")) return true;
-  return /^(qu[eé]|cu[aá]nt|cu[aá]l|cu[aá]ndo|qui[eé]n|c[oó]mo|tengo|mis|dime|dame|mu[eé]stra|list|hay|cu[eé]nta)\b/i.test(t);
+  // Una fecha "suelta" es consulta de agenda ("mañana", "el viernes", "25/07").
+  if (/^(el\s+)?(hoy|ma[nñ]ana|pasado\s*ma[nñ]ana|lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo|esta\s+semana|\d{1,2}[/-]\d{1,2})$/i.test(t)) return true;
+  // Menciona agenda/sesiones/citas junto a un pedido o una fecha → consulta.
+  if (/\b(agenda|agendad[oa]s?|sesi[oó]n(es)?|citas?)\b/i.test(t) &&
+      /\b(hoy|ma[nñ]ana|semana|lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo|tengo|mis?|dame|dime|brindas?|br[ií]ndame|env[ií]a|manda|mu[eé]stra|puedes|podr[ií]as|quiero|necesito|cu[aá]nt)\b/i.test(t)) return true;
+  return /^(qu[eé]|cu[aá]nt|cu[aá]l|cu[aá]ndo|qui[eé]n|c[oó]mo|tengo|mis|dime|dame|mu[eé]stra|list|hay|cu[eé]nta|quiero|necesito|puedes|podr[ií]as|me\s+(brindas?|das|env[ií]as|mandas|muestras)|br[ií]ndame)\b/i.test(t);
 }
 
 function pacienteLabel(p) {
