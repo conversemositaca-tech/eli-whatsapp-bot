@@ -14,6 +14,7 @@ DEJAR PASAR todo lo demás, incluyendo:
 - Mensajes emocionales o personales
 - Preguntas sobre otros temas (el asistente las maneja)
 - Mensajes ambiguos o poco claros (siempre duda a favor del usuario)
+- Profesionales que preguntan por el alquiler de consultorios o espacios (psicólogos, nutricionistas, coaches, etc.) — es un servicio real de Ítaca, NO es spam
 
 Sé muy conservador al bloquear — es mejor dejar pasar un spam ocasional que bloquear a alguien que necesita ayuda.
 

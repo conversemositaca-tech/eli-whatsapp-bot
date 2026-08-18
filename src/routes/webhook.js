@@ -94,6 +94,11 @@ const pendingMessages = new Map(); // telefono → { timer, mensajes[] }
 const processedIds = new Map(); // messageId → expiry timestamp
 const ID_TTL_MS = 5 * 60 * 1000;
 
+// ── ESPACIOS PROFESIONALES ──────────────────────────────────────────────────
+// Profesionales a los que ya se avisó a Gabriela, para no mandar el mismo
+// aviso dos veces si la IA repite el resumen en turnos siguientes.
+const espaciosAvisados = new Set();
+
 function yaFueProcesado(id) {
   const expiry = processedIds.get(id);
   if (!expiry) return false;
@@ -285,7 +290,7 @@ async function procesarMensajesAcumulados(telefono, mensajes) {
     const presencia = iniciarPresencia(telefono);
 
     // ── 3. Procesar con IA ─────────────────────────────────────────────────
-    const { respuesta, lead, imagenes, stickers, lead_cerrado, resumen_coordinadora, historialActualizado } = await procesarConIA(
+    const { respuesta, lead, imagenes, stickers, lead_cerrado, resumen_coordinadora, espacios, historialActualizado } = await procesarConIA(
       historyPrevio,
       mensajeParaIA,
       { imagenBase64, imagenMime }
@@ -380,6 +385,32 @@ async function procesarMensajesAcumulados(telefono, mensajes) {
         );
       }
       promesas.push(pausarFollowup(telefono).catch(() => {}));
+    }
+
+    // Profesional interesado en alquilar un espacio → NO es un paciente: sale
+    // del recontacto de terapia y el dato va a Gabriela (dirección comercial),
+    // no a las coordinadoras de sede.
+    if (espacios?.interesado) {
+      promesas.push(pausarFollowup(telefono).catch(() => {}));
+
+      const resumenEspacios = (espacios.resumen || "").trim();
+      if (resumenEspacios && !espaciosAvisados.has(telefono)) {
+        espaciosAvisados.add(telefono);
+        // Número del dossier comercial de espacios (Gabriela Rentería).
+        // Se puede sobreescribir con CONTACTO_ESPACIOS en el entorno.
+        const numEspacios = process.env.CONTACTO_ESPACIOS || "51961350844";
+        if (numEspacios) {
+          console.log(`[ESPACIOS] Avisando a Gabriela (${numEspacios}) — ${telefono}`);
+          promesas.push(
+            enviarMensaje(
+              numEspacios,
+              `🏢 *INTERESADO EN ESPACIOS PROFESIONALES*\n\n${resumenEspacios}\n\nEscribió desde el +${telefono}`
+            ).catch((err) => console.warn(`[ESPACIOS] Error enviando aviso: ${err.message}`))
+          );
+        } else {
+          console.warn(`[ESPACIOS] CONTACTO_ESPACIOS sin configurar — nadie fue avisado de ${telefono}: ${resumenEspacios}`);
+        }
+      }
     }
 
     // Rechazo explícito → sacar al lead del recontacto automático
