@@ -1,5 +1,38 @@
 const { enviarMensaje } = require("./evolution");
 
+// Número de Gabriela Rentería (dirección comercial). Recibe copia de los avisos
+// que tocan plata, sin quitarle el aviso a la coordinadora de sede.
+function numeroGabriela() {
+  return process.env.CONTACTO_GABRIELA || process.env.CONTACTO_ESPACIOS || "51961350844";
+}
+
+const TIPOS_QUE_SE_COPIAN = new Set(["LISTO_PARA_COORDINAR"]);
+
+/**
+ * Sede que atiende al lead. Para presencial es su ciudad; para virtual es la
+ * sede con la que el lead eligió trabajar (Eli se lo pregunta), que es la que
+ * tiene a los psicólogos asignados. Sin sede definida cae en Piura.
+ */
+function sedeDelLead(lead = {}) {
+  const sede = String(lead.sede || "").toLowerCase();
+  if (sede === "lima" || sede === "piura") return sede;
+  return String(lead.ciudad || "").toLowerCase() === "lima" ? "lima" : "piura";
+}
+
+/**
+ * Envía a Gabriela una copia de un aviso ya mandado a la coordinadora.
+ */
+async function copiarAGabriela(mensaje, numeroCoordinadora) {
+  const num = numeroGabriela();
+  if (!num || num === numeroCoordinadora) return; // ya le llegó como coordinadora
+  try {
+    await enviarMensaje(num, `📋 *COPIA — dirección comercial*\n\n${mensaje}`);
+    console.log(`[ROUTING] Copia a Gabriela (${num})`);
+  } catch (e) {
+    console.warn(`[ROUTING] No se pudo copiar a Gabriela: ${e.message}`);
+  }
+}
+
 /**
  * Deriva notificaciones a Yazmin (Piura) o Ayvi (Lima) según la ciudad del lead.
  *
@@ -150,4 +183,4 @@ function construirRecontacto(telefonoCliente, lead, nombreAsistente, sede, resum
   return lineas.join("\n");
 }
 
-module.exports = { derivarLeadAAsistente };
+module.exports = { derivarLeadAAsistente, copiarAGabriela, sedeDelLead, numeroGabriela };

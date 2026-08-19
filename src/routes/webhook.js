@@ -62,7 +62,7 @@ const STICKERS = {
 
 const { procesarConIA, transcribirAudio } = require("../services/openai");
 const { esPsicologo, psicologoEnCache, manejarNotaClinica } = require("../services/notaClinica");
-const { derivarLeadAAsistente } = require("../services/routing");
+const { derivarLeadAAsistente, copiarAGabriela, sedeDelLead, numeroGabriela } = require("../services/routing");
 const { registrarLeadEnSheets, registrarLeadEnPipeline } = require("../services/googlesheets");
 const { detectarCrisis } = require("../agents/detectarCrisis");
 const { analizarContexto } = require("../agents/analizarContexto");
@@ -395,15 +395,19 @@ async function procesarMensajesAcumulados(telefono, mensajes, opciones = {}) {
 
     // Lead cerrado → enviar resumen a coordinadora + pausar followup
     if (lead_cerrado && resumen_coordinadora) {
-      const ciudad = (lead?.ciudad || "").toLowerCase();
-      const numCoord = ciudad === "lima" ? process.env.ASISTENTE_LIMA : process.env.ASISTENTE_PIURA;
-      const nombreCoord = ciudad === "lima" ? "Ayvi" : "Yazmin";
+      // La sede manda, no la ciudad: un lead virtual lo atiende la sede que eligió.
+      const esLima = sedeDelLead(lead || {}) === "lima";
+      const numCoord = esLima ? process.env.ASISTENTE_LIMA : process.env.ASISTENTE_PIURA;
+      const nombreCoord = esLima ? "Ayvi" : "Yazmin";
       if (numCoord) {
         console.log(`[CIERRE] Enviando resumen a ${nombreCoord} (${numCoord})`);
+        const textoCierre = `✅ *LEAD CERRADO — ÍTACA ${esLima ? "LIMA" : "PIURA"}*\n\n${resumen_coordinadora}`;
         promesas.push(
-          enviarMensaje(numCoord, `✅ *LEAD CERRADO — ÍTACA ${ciudad === "lima" ? "LIMA" : "PIURA"}*\n\n${resumen_coordinadora}`)
+          enviarMensaje(numCoord, textoCierre)
             .catch((err) => console.warn(`[CIERRE] Error enviando resumen: ${err.message}`))
         );
+        // Gabriela (dirección comercial) recibe copia de los cierres.
+        promesas.push(copiarAGabriela(textoCierre, numCoord));
       }
       promesas.push(pausarFollowup(telefono).catch(() => {}));
     }
@@ -417,9 +421,7 @@ async function procesarMensajesAcumulados(telefono, mensajes, opciones = {}) {
       const resumenEspacios = (espacios.resumen || "").trim();
       if (resumenEspacios && !espaciosAvisados.has(telefono)) {
         espaciosAvisados.add(telefono);
-        // Número del dossier comercial de espacios (Gabriela Rentería).
-        // Se puede sobreescribir con CONTACTO_ESPACIOS en el entorno.
-        const numEspacios = process.env.CONTACTO_ESPACIOS || "51961350844";
+        const numEspacios = numeroGabriela();
         if (numEspacios) {
           console.log(`[ESPACIOS] Avisando a Gabriela (${numEspacios}) — ${telefono}`);
           promesas.push(
