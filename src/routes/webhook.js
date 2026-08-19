@@ -14,6 +14,7 @@ const {
   extraerTipoMensaje,
   extraerStickerSha256,
   descargarMediaBase64,
+  recordarJid,
 } = require("../services/evolution");
 const {
   estaEnAtencionHumana,
@@ -162,7 +163,8 @@ function manejarStickerControl(data) {
  * Procesa en background todos los mensajes acumulados de un usuario.
  * Combina textos, transcribe audios y responde con una sola llamada a la IA.
  */
-async function procesarMensajesAcumulados(telefono, mensajes) {
+async function procesarMensajesAcumulados(telefono, mensajes, opciones = {}) {
+  const { esIdentidadOpaca = false } = opciones;
   try {
     // ── Modo nota clínica ────────────────────────────────────────────────────
     // Si el número es de una psicóloga registrada en Itaca, Eli NO entra al flujo
@@ -283,6 +285,15 @@ async function procesarMensajesAcumulados(telefono, mensajes) {
         `[CONTEXTO: etapa=${contexto.etapa} | recogido: ${datosOk} | falta: ${datosFalta}.${precioBis}${sinMotivo}${nota}]\n\n${textoFinal}`;
     } else {
       mensajeParaIA = textoFinal;
+    }
+
+    // WhatsApp ya no entrega el número de algunos contactos (identidades @lid).
+    // Eli puede responderles, pero la coordinadora no tendría a dónde escribirles:
+    // le avisamos para que se lo pida al lead antes de derivarlo.
+    if (esIdentidadOpaca) {
+      mensajeParaIA =
+        "[SISTEMA: WhatsApp no nos está entregando el número de este contacto. Pídele su número de celular junto con el nombre y el DNI, y anótalo en el resumen para la coordinadora. No le expliques el motivo técnico: pídeselo con naturalidad, como un dato más para coordinar.]\n\n" +
+        mensajeParaIA;
     }
 
     // ── 2. Arrancar "escribiendo..." antes de llamar a la IA ──────────────
@@ -490,6 +501,10 @@ router.post("/", (req, res) => {
 
   if (!data) return res.status(200).json({ status: "ignored", reason: "no data" });
 
+  // Recordar con qué jid llegó este contacto: si es una identidad @lid, hay que
+  // responderle a ESE jid, no a los dígitos pelados (Evolution daría 400).
+  recordarJid(data.key?.remoteJid);
+
   // Mensajes salientes del propio número: normalmente se ignoran, PERO
   // interceptamos los stickers de control con los que el operador toma o
   // devuelve la conversación a Eli.
@@ -500,32 +515,6 @@ router.post("/", (req, res) => {
 
   const remoteJid = data.key?.remoteJid || "";
 
-  // ── DIAGNÓSTICO TEMPORAL @lid ───────────────────────────────────────────
-  // WhatsApp migró los chats 1-a-1 a IDs opacos @lid, que NO son el número.
-  // Volcamos el key crudo y rastreamos en TODO el payload dónde viene el
-  // número real, para arreglarlo con datos y no adivinando. Quitar después.
-  // Dispara con @lid explícito y también cuando el "número" no parece un
-  // teléfono (un LID disfrazado de @s.whatsapp.net: demasiados dígitos).
-  const idCrudo = remoteJid.replace(/@.*$/, "");
-  if (remoteJid.includes("@lid") || !/^\d{8,13}$/.test(idCrudo)) {
-    const encontrados = [];
-    const rastrear = (obj, ruta = "data", nivel = 0) => {
-      if (!obj || typeof obj !== "object" || nivel > 4) return;
-      for (const [k, v] of Object.entries(obj)) {
-        if (typeof v === "string") {
-          if (v.length < 200 && /\d{8,15}@s\.whatsapp\.net/.test(v)) {
-            encontrados.push(`${ruta}.${k}=${v}`);
-          }
-        } else if (typeof v === "object") {
-          rastrear(v, `${ruta}.${k}`, nivel + 1);
-        }
-      }
-    };
-    rastrear(data);
-    console.log(`[LID] key=${JSON.stringify(data.key)}`);
-    console.log(`[LID] pushName=${data.pushName || "—"} | campos raíz: ${Object.keys(data).join(", ")}`);
-    console.log(`[LID] número real encontrado en: ${encontrados.length ? encontrados.join("  |  ") : "NINGÚN CAMPO"}`);
-  }
   if (remoteJid.endsWith("@g.us")) return res.status(200).json({ status: "ignored", reason: "group" });
 
   // 2. Deduplicar por messageId — evita procesar el mismo mensaje dos veces
@@ -538,6 +527,7 @@ router.post("/", (req, res) => {
   }
 
   const telefono = extraerTelefono(remoteJid);
+  const esIdentidadOpaca = !!telefono && !/^\d{8,13}$/.test(telefono);
   const tipoMensaje = extraerTipoMensaje(data.message);
   const textoUsuario = extraerTexto(data.message);
 
@@ -554,6 +544,11 @@ router.post("/", (req, res) => {
   }
 
   console.log(`[WEBHOOK] ${telefono} (${tipoMensaje}): "${textoUsuario || "—"}"`);
+  if (esIdentidadOpaca) {
+    console.log(
+      `[LID] ${telefono} (${data.pushName || "sin nombre"}) — WhatsApp no entrega su número; se responde al jid @lid`
+    );
+  }
 
   // Agregar al buffer del usuario
   if (!pendingMessages.has(telefono)) {
@@ -571,7 +566,7 @@ router.post("/", (req, res) => {
     const mensajesAcumulados = pending.mensajes;
     pendingMessages.delete(telefono);
     // El loop de typing lo arranca procesarMensajesAcumulados internamente
-    procesarMensajesAcumulados(telefono, mensajesAcumulados);
+    procesarMensajesAcumulados(telefono, mensajesAcumulados, { esIdentidadOpaca });
   }, debounce);
 
   res.status(200).json({ status: "queued" });

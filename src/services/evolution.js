@@ -9,6 +9,37 @@ const evolutionClient = axios.create({
 });
 
 // ─────────────────────────────────────────────
+// IDENTIDADES @lid
+// ─────────────────────────────────────────────
+// WhatsApp migró los chats 1-a-1 a IDs opacos (@lid) que NO son el teléfono.
+// Evolution los acepta como destino SOLO con el sufijo @lid: si le mandamos
+// los dígitos pelados los toma por un número, no existe, y responde 400 — el
+// lead se queda sin respuesta. Guardamos el jid exacto con el que llegó cada
+// contacto y lo reutilizamos al responderle.
+const jidsConocidos = new Map(); // dígitos del id → jid completo enrutable
+
+function recordarJid(remoteJid) {
+  if (!remoteJid || !remoteJid.includes("@")) return;
+  const id = remoteJid.replace(/@.*$/, "");
+  if (id) jidsConocidos.set(id, remoteJid);
+}
+
+/**
+ * Traduce lo que el bot usa como "teléfono" al destino que espera Evolution.
+ * - Número de verdad → los dígitos, como siempre.
+ * - Identidad @lid    → el jid completo (158807137218784@lid).
+ * Si nunca vimos ese contacto (p. ej. un followup tras un redeploy), se deduce
+ * por la forma: lo que no parece un teléfono es un @lid.
+ */
+function jidDestino(numero) {
+  const n = String(numero || "");
+  if (n.includes("@")) return n;
+  const conocido = jidsConocidos.get(n);
+  if (conocido && !conocido.endsWith("@s.whatsapp.net")) return conocido;
+  return /^\d{8,13}$/.test(n) ? n : `${n}@lid`;
+}
+
+// ─────────────────────────────────────────────
 // PRESENCIA
 // ─────────────────────────────────────────────
 
@@ -27,13 +58,17 @@ function iniciarPresencia(numero) {
   const instancia = process.env.EVOLUTION_INSTANCE;
   let activo = true;
 
-  const jid = numero.includes("@") ? numero : `${numero}@s.whatsapp.net`;
+  const destino = jidDestino(numero);
+  const jid = destino.includes("@") ? destino : `${destino}@s.whatsapp.net`;
 
   const enviarEstado = (presence, delay) =>
     evolutionClient
+      // Evolution 2.x espera presence y delay en la raíz del body.
+      // Anidados en options responde 400 y el "escribiendo..." nunca aparece.
       .post(`/chat/sendPresence/${instancia}`, {
         number: jid,
-        options: { presence, delay },
+        presence,
+        delay,
       })
       .then(() => true)
       .catch((e) => {
@@ -100,7 +135,7 @@ async function simularEscribiendo(numero, delayMs) {
 async function enviarMensaje(numero, texto) {
   const instancia = process.env.EVOLUTION_INSTANCE;
   await evolutionClient.post(`/message/sendText/${instancia}`, {
-    number: numero,
+    number: jidDestino(numero),
     text: texto,
   });
 }
@@ -239,7 +274,7 @@ async function descargarMediaBase64(data) {
 async function enviarImagenUrl(numero, url, caption = "") {
   const instancia = process.env.EVOLUTION_INSTANCE;
   await evolutionClient.post(`/message/sendMedia/${instancia}`, {
-    number: numero,
+    number: jidDestino(numero),
     mediatype: "image",
     media: url,
     caption,
@@ -254,12 +289,14 @@ async function enviarImagenUrl(numero, url, caption = "") {
 async function enviarSticker(numero, url) {
   const instancia = process.env.EVOLUTION_INSTANCE;
   await evolutionClient.post(`/message/sendSticker/${instancia}`, {
-    number: numero,
+    number: jidDestino(numero),
     sticker: url,
   });
 }
 
 module.exports = {
+  recordarJid,
+  jidDestino,
   iniciarPresencia,
   presenciaInmediata,
   simularEscribiendo,
