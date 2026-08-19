@@ -306,10 +306,16 @@ async function procesarMensajesAcumulados(telefono, mensajes) {
     // ── 5. Detener typing y enviar respuesta ───────────────────────────────
     presencia.detener();
 
-    // Primer contacto: enviar imagen de bienvenida antes del saludo
+    // Primer contacto: enviar imagen de bienvenida antes del saludo.
+    // Si el envío falla (URL caída, número no enrutable), NO puede tumbar la
+    // respuesta de texto: el lead se quedaría sin contestación.
     if (esPrimerContacto && process.env.IMG_BIENVENIDA) {
-      await enviarImagenUrl(telefono, process.env.IMG_BIENVENIDA, "");
-      await esperar(800);
+      try {
+        await enviarImagenUrl(telefono, process.env.IMG_BIENVENIDA, "");
+        await esperar(800);
+      } catch (e) {
+        console.warn(`[IMG] No se pudo enviar la bienvenida a ${telefono}: ${e.message}`);
+      }
     }
 
     // Imágenes primero — llegan antes que el texto de respuesta
@@ -318,7 +324,11 @@ async function procesarMensajesAcumulados(telefono, mensajes) {
       const img = IMAGENES[imgId];
       if (img?.url) {
         console.log(`[IMG] Enviando imagen "${imgId}" a ${telefono}`);
-        await enviarImagenUrl(telefono, img.url, img.caption);
+        try {
+          await enviarImagenUrl(telefono, img.url, img.caption);
+        } catch (e) {
+          console.warn(`[IMG] Falló el envío de "${imgId}" a ${telefono}: ${e.message}`);
+        }
       } else {
         console.warn(`[IMG] URL no configurada para imagen: "${imgId}"`);
       }
@@ -428,7 +438,11 @@ async function procesarMensajesAcumulados(telefono, mensajes) {
       const url = STICKERS[stickerId];
       if (url) {
         console.log(`[STICKER] Enviando sticker "${stickerId}" a ${telefono}`);
-        promesas.push(enviarSticker(telefono, url));
+        promesas.push(
+          enviarSticker(telefono, url).catch((e) =>
+            console.warn(`[STICKER] Falló el envío de "${stickerId}" a ${telefono}: ${e.message}`)
+          )
+        );
       } else {
         console.warn(`[STICKER] ID no reconocido: "${stickerId}"`);
       }
@@ -485,6 +499,30 @@ router.post("/", (req, res) => {
   }
 
   const remoteJid = data.key?.remoteJid || "";
+
+  // ── DIAGNÓSTICO TEMPORAL @lid ───────────────────────────────────────────
+  // WhatsApp migró los chats 1-a-1 a IDs opacos @lid, que NO son el número.
+  // Volcamos el key crudo y rastreamos en TODO el payload dónde viene el
+  // número real, para arreglarlo con datos y no adivinando. Quitar después.
+  if (remoteJid.includes("@lid")) {
+    const encontrados = [];
+    const rastrear = (obj, ruta = "data", nivel = 0) => {
+      if (!obj || typeof obj !== "object" || nivel > 4) return;
+      for (const [k, v] of Object.entries(obj)) {
+        if (typeof v === "string") {
+          if (v.length < 200 && /\d{8,15}@s\.whatsapp\.net/.test(v)) {
+            encontrados.push(`${ruta}.${k}=${v}`);
+          }
+        } else if (typeof v === "object") {
+          rastrear(v, `${ruta}.${k}`, nivel + 1);
+        }
+      }
+    };
+    rastrear(data);
+    console.log(`[LID] key=${JSON.stringify(data.key)}`);
+    console.log(`[LID] pushName=${data.pushName || "—"} | campos raíz: ${Object.keys(data).join(", ")}`);
+    console.log(`[LID] número real encontrado en: ${encontrados.length ? encontrados.join("  |  ") : "NINGÚN CAMPO"}`);
+  }
   if (remoteJid.endsWith("@g.us")) return res.status(200).json({ status: "ignored", reason: "group" });
 
   // 2. Deduplicar por messageId — evita procesar el mismo mensaje dos veces
