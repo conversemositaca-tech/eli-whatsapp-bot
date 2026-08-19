@@ -19,7 +19,12 @@ if (missing.length > 0) {
   process.exit(1);
 }
 
+// Marca de versión: sirve para saber en los logs de EasyPanel si el deploy
+// que estás mirando ya trae los últimos cambios. Actualizar al desplegar.
+const BUILD = "2026-08-18 · lid-diag";
+
 app.listen(PORT, () => {
   console.log(`[STARTUP] Eli WhatsApp Bot corriendo en http://localhost:${PORT}`);
+  console.log(`[STARTUP] build: ${BUILD}`);
   console.log(`[STARTUP] Webhook disponible en POST http://localhost:${PORT}/webhook`);
 });

@@ -504,7 +504,10 @@ router.post("/", (req, res) => {
   // WhatsApp migró los chats 1-a-1 a IDs opacos @lid, que NO son el número.
   // Volcamos el key crudo y rastreamos en TODO el payload dónde viene el
   // número real, para arreglarlo con datos y no adivinando. Quitar después.
-  if (remoteJid.includes("@lid")) {
+  // Dispara con @lid explícito y también cuando el "número" no parece un
+  // teléfono (un LID disfrazado de @s.whatsapp.net: demasiados dígitos).
+  const idCrudo = remoteJid.replace(/@.*$/, "");
+  if (remoteJid.includes("@lid") || !/^\d{8,13}$/.test(idCrudo)) {
     const encontrados = [];
     const rastrear = (obj, ruta = "data", nivel = 0) => {
       if (!obj || typeof obj !== "object" || nivel > 4) return;
