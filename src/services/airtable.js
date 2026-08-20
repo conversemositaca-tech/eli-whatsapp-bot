@@ -1,4 +1,5 @@
 const axios = require("axios");
+const { numeroUtil } = require("../utils/contacto");
 
 const BASE_URL = "https://api.airtable.com/v0";
 const BASE_ID = process.env.AIRTABLE_BASE_ID;
@@ -85,6 +86,10 @@ async function registrarOActualizarLead(telefono, lead) {
 
   // DNI va en notas adicionales (no hay campo específico en la tabla)
   const dniInfo = [];
+  // Si WhatsApp no entregó el número, CELULAR guarda un identificador interno
+  // que no sirve para llamar: dejamos aquí el celular que dio la persona.
+  const celReal = numeroUtil(telefono, lead);
+  if (celReal && celReal !== telefono) dniInfo.push(`Cel: ${celReal}`);
   if (lead.dni_contacto) dniInfo.push(`DNI contacto: ${lead.dni_contacto}`);
   if (lead.dni_paciente) dniInfo.push(`DNI paciente: ${lead.dni_paciente}`);
   if (dniInfo.length > 0) {

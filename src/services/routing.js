@@ -1,4 +1,5 @@
 const { enviarMensaje } = require("./evolution");
+const { lineaContacto } = require("../utils/contacto");
 
 // Número de Gabriela Rentería (dirección comercial). Recibe copia de los avisos
 // que tocan plata, sin quitarle el aviso a la coordinadora de sede.
@@ -17,24 +18,6 @@ function sedeDelLead(lead = {}) {
   const sede = String(lead.sede || "").toLowerCase();
   if (sede === "lima" || sede === "piura") return sede;
   return String(lead.ciudad || "").toLowerCase() === "lima" ? "lima" : "piura";
-}
-
-/**
- * Línea de contacto del aviso. WhatsApp ya no entrega el número de algunos
- * contactos (identidades @lid): en esos casos el identificador NO sirve como
- * teléfono y un wa.me con él es un enlace roto. Se usa el celular que el lead
- * dio en la conversación y, si no dio ninguno, se dice claro que no hay.
- */
-function lineaContacto(telefonoCliente, lead = {}) {
-  const id = String(telefonoCliente || "");
-  if (/^\d{8,13}$/.test(id)) return `📱 WhatsApp: wa.me/${id}`;
-
-  const dado = String(lead.telefono_contacto || "").replace(/\D/g, "");
-  if (dado) {
-    const numero = dado.length === 9 ? `51${dado}` : dado;
-    return `📱 WhatsApp: wa.me/${numero} (el número que dio en el chat)`;
-  }
-  return "📱 WhatsApp: ⚠️ WhatsApp no entrega el número de este contacto — respóndele desde el chat de Eli";
 }
 
 /**

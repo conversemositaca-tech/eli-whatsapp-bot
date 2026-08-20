@@ -1,4 +1,5 @@
 const axios = require("axios");
+const { numeroUtil } = require("../utils/contacto");
 
 function getUrl(ciudad) {
   return (ciudad || "").toLowerCase() === "lima"
@@ -15,6 +16,14 @@ async function postSheet(url, payload) {
  * Registra o actualiza un lead en la pestaña LEADS del Sheet correcto.
  * Solo se llama cuando el lead ya tiene DNI.
  */
+
+// Cuando WhatsApp no entrega el número, la columna celular lleva un
+// identificador interno: el número real de la persona va en las notas.
+function celUtil(telefono, lead) {
+  const real = numeroUtil(telefono, lead);
+  return real && real !== telefono ? `Cel: ${real}` : "";
+}
+
 async function registrarLeadEnSheets(telefono, lead, notas = "") {
   const url = getUrl(lead.ciudad);
   if (!url) {
@@ -34,7 +43,7 @@ async function registrarLeadEnSheets(telefono, lead, notas = "") {
     distrito:  lead.ciudad             || "",
     dni:       dniParts.join(" | "),
     psicologo: lead.psicologo_sugerido || "",
-    notas:     [lead.motivo, notas].filter(Boolean).join(" — "),
+    notas:     [celUtil(telefono, lead), lead.motivo, notas].filter(Boolean).join(" — "),
   };
 
   try {

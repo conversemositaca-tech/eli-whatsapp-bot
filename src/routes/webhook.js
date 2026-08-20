@@ -292,7 +292,7 @@ async function procesarMensajesAcumulados(telefono, mensajes, opciones = {}) {
     // le avisamos para que se lo pida al lead antes de derivarlo.
     if (esIdentidadOpaca) {
       mensajeParaIA =
-        "[SISTEMA: WhatsApp no nos está entregando el número de este contacto. Pídele su número de celular junto con el nombre y el DNI, y anótalo en el resumen para la coordinadora. No le expliques el motivo técnico: pídeselo con naturalidad, como un dato más para coordinar.]\n\n" +
+        "[SISTEMA: WhatsApp no nos está entregando el número de este contacto. Antes de derivarlo, pídele su número de celular junto con los otros datos que necesites y ponlo en telefono_contacto. No le expliques el motivo técnico: pídeselo con naturalidad, como un dato más para coordinar.]\n\n" +
         mensajeParaIA;
     }
 
@@ -428,7 +428,7 @@ async function procesarMensajesAcumulados(telefono, mensajes, opciones = {}) {
           promesas.push(
             enviarMensaje(
               numEspacios,
-              `🏢 *INTERESADO EN ESPACIOS PROFESIONALES*\n\n${resumenEspacios}\n\nEscribió desde el +${telefono}`
+              `🏢 *INTERESADO EN ESPACIOS PROFESIONALES*\n\n${resumenEspacios}\n\n${lineaContacto(telefono, lead || {})}`
             ).catch((err) => console.warn(`[ESPACIOS] Error enviando aviso: ${err.message}`))
           );
         } else {
