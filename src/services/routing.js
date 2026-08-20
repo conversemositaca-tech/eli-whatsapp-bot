@@ -20,6 +20,24 @@ function sedeDelLead(lead = {}) {
 }
 
 /**
+ * Línea de contacto del aviso. WhatsApp ya no entrega el número de algunos
+ * contactos (identidades @lid): en esos casos el identificador NO sirve como
+ * teléfono y un wa.me con él es un enlace roto. Se usa el celular que el lead
+ * dio en la conversación y, si no dio ninguno, se dice claro que no hay.
+ */
+function lineaContacto(telefonoCliente, lead = {}) {
+  const id = String(telefonoCliente || "");
+  if (/^\d{8,13}$/.test(id)) return `📱 WhatsApp: wa.me/${id}`;
+
+  const dado = String(lead.telefono_contacto || "").replace(/\D/g, "");
+  if (dado) {
+    const numero = dado.length === 9 ? `51${dado}` : dado;
+    return `📱 WhatsApp: wa.me/${numero} (el número que dio en el chat)`;
+  }
+  return "📱 WhatsApp: ⚠️ WhatsApp no entrega el número de este contacto — respóndele desde el chat de Eli";
+}
+
+/**
  * Envía a Gabriela una copia de un aviso ya mandado a la coordinadora.
  */
 async function copiarAGabriela(mensaje, numeroCoordinadora) {
@@ -43,8 +61,8 @@ async function copiarAGabriela(mensaje, numeroCoordinadora) {
  *   'RECONTACTO'          — lead frío, Eli envió seguimiento automático sin respuesta
  */
 async function derivarLeadAAsistente(telefonoCliente, lead, tipo = "NUEVO_LEAD", resumen = "") {
-  const ciudad = (lead.ciudad || "").toLowerCase();
-  const esLima = ciudad === "lima";
+  // La sede manda, no la ciudad: un lead virtual lo atiende la sede que eligió.
+  const esLima = sedeDelLead(lead) === "lima";
 
   const numeroAsistente = esLima ? process.env.ASISTENTE_LIMA : process.env.ASISTENTE_PIURA;
   const nombreAsistente = esLima ? "Ayvi" : "Yazmin";
@@ -66,6 +84,8 @@ async function derivarLeadAAsistente(telefonoCliente, lead, tipo = "NUEVO_LEAD",
 
   await enviarMensaje(numeroAsistente, mensaje);
   console.log(`[ROUTING] Notificación ${tipo} enviada a ${nombreAsistente} (${sede}): ${numeroAsistente}`);
+
+  if (TIPOS_QUE_SE_COPIAN.has(tipo)) await copiarAGabriela(mensaje, numeroAsistente);
 }
 
 // ─────────────────────────────────────────────
@@ -86,7 +106,7 @@ function construirNuevoLead(telefonoCliente, lead, nombreAsistente, sede, resume
     "",
     `📊 ${icono}`,
     "",
-    `📱 WhatsApp: wa.me/${telefonoCliente}`,
+    lineaContacto(telefonoCliente, lead),
     `👤 Contacto: ${lead.nombre_contacto || "—"}`,
   ];
 
@@ -110,7 +130,7 @@ function construirListoParaCoordinar(telefonoCliente, lead, nombreAsistente, sed
     "",
     `${nombre} confirmó que quiere agendar y Eli ya recopiló sus datos.`,
     "",
-    `📱 WhatsApp: wa.me/${telefonoCliente}`,
+    lineaContacto(telefonoCliente, lead),
     `👤 Contacto: ${lead.nombre_contacto || "—"}`,
   ];
 
@@ -145,7 +165,7 @@ function construirNoCerrado(telefonoCliente, lead, nombreAsistente, sede, resume
     `${nombre} llegó a la oferta de la primera consulta pero lleva 3 horas sin responder a los recordatorios automáticos de Eli.`,
     "",
     `📊 ${icono}`,
-    `📱 WhatsApp: wa.me/${telefonoCliente}`,
+    lineaContacto(telefonoCliente, lead),
     `👤 Contacto: ${nombre}`,
   ];
 
@@ -172,7 +192,7 @@ function construirRecontacto(telefonoCliente, lead, nombreAsistente, sede, resum
     "",
     `Eli envió seguimiento automático a *${nombre}* pero no respondió.`,
     "",
-    `📱 WhatsApp: wa.me/${telefonoCliente}`,
+    lineaContacto(telefonoCliente, lead),
     `👤 Contacto: ${nombre}`,
     `💬 Motivo: ${motivo}`,
     `📊 Estado: ${icono}`,
@@ -183,4 +203,4 @@ function construirRecontacto(telefonoCliente, lead, nombreAsistente, sede, resum
   return lineas.join("\n");
 }
 
-module.exports = { derivarLeadAAsistente, copiarAGabriela, sedeDelLead, numeroGabriela };
+module.exports = { derivarLeadAAsistente, copiarAGabriela, sedeDelLead, numeroGabriela, lineaContacto };

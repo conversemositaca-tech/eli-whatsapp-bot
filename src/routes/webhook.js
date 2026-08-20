@@ -62,7 +62,7 @@ const STICKERS = {
 
 const { procesarConIA, transcribirAudio } = require("../services/openai");
 const { esPsicologo, psicologoEnCache, manejarNotaClinica } = require("../services/notaClinica");
-const { derivarLeadAAsistente, copiarAGabriela, sedeDelLead, numeroGabriela } = require("../services/routing");
+const { derivarLeadAAsistente, copiarAGabriela, sedeDelLead, numeroGabriela, lineaContacto } = require("../services/routing");
 const { registrarLeadEnSheets, registrarLeadEnPipeline } = require("../services/googlesheets");
 const { detectarCrisis } = require("../agents/detectarCrisis");
 const { analizarContexto } = require("../agents/analizarContexto");
@@ -401,7 +401,8 @@ async function procesarMensajesAcumulados(telefono, mensajes, opciones = {}) {
       const nombreCoord = esLima ? "Ayvi" : "Yazmin";
       if (numCoord) {
         console.log(`[CIERRE] Enviando resumen a ${nombreCoord} (${numCoord})`);
-        const textoCierre = `✅ *LEAD CERRADO — ÍTACA ${esLima ? "LIMA" : "PIURA"}*\n\n${resumen_coordinadora}`;
+        const textoCierre =
+          `✅ *LEAD CERRADO — ÍTACA ${esLima ? "LIMA" : "PIURA"}*\n\n${resumen_coordinadora}\n\n${lineaContacto(telefono, lead || {})}`;
         promesas.push(
           enviarMensaje(numCoord, textoCierre)
             .catch((err) => console.warn(`[CIERRE] Error enviando resumen: ${err.message}`))

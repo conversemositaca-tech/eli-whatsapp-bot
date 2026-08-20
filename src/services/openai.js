@@ -762,6 +762,7 @@ Siempre responde con JSON válido, sin excepciones:
     "ciudad": "Piura | Lima | Virtual | (vacío si aún no se sabe)",
     "sede": "Piura | Lima | (vacío si aún no se sabe)",
     "motivo": "motivo de consulta o vacío si aún no se sabe",
+    "telefono_contacto": "",
     "dni_contacto": "",
     "dni_paciente": "",
     "psicologo_sugerido": "",
@@ -820,6 +821,10 @@ Ejemplo: confirmación de cita → "stickers": ["gracias_por_confiar"]
 
 Actualiza los campos del lead progresivamente conforme el usuario los proporcione.
 Si el usuario corrige un dato, actualiza el campo silenciosamente en este JSON.
+
+CAMPO "telefono_contacto":
+El número de celular que el lead escribe cuando se lo pides (o si lo da por su cuenta, o si pide que lo contacten a otro número). Cópialo tal cual te lo dio, solo dígitos. Déjalo vacío si nunca lo escribió.
+Es lo único que le permite a la coordinadora contactarlo cuando WhatsApp no nos entrega su número, así que no lo inventes ni lo deduzcas.
 
 CAMPO "sede":
 La sede que se hará cargo del lead: "Piura" o "Lima". Es la que define qué psicólogos puedes sugerirle y qué coordinadora lo contacta.
